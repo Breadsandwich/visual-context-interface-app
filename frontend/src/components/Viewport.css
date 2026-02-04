@@ -1,0 +1,75 @@
+.viewport {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #1a1a1a;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.viewport-header {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: #2a2a2a;
+  border-bottom: 1px solid #333;
+}
+
+.viewport-url {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: monospace;
+  font-size: 0.875rem;
+  color: #999;
+}
+
+.viewport-status {
+  font-size: 0.625rem;
+}
+
+.viewport-route {
+  color: #fff;
+}
+
+.viewport-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.viewport-container.screenshot-mode {
+  cursor: crosshair;
+}
+
+.viewport-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}
+
+.viewport-iframe.no-pointer-events {
+  pointer-events: none;
+}
+
+.selection-overlay {
+  position: absolute;
+  border: 2px dashed #646cff;
+  background: rgba(100, 108, 255, 0.1);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.screenshot-hint {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  pointer-events: none;
+}

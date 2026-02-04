@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  visual-context-tool:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+      - "8000:8000"
+    environment:
+      - TARGET_HOST=${TARGET_HOST:-dummy-target}
+      - TARGET_PORT=${TARGET_PORT:-3001}
+      - VITE_PROXY_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app/frontend
+      - ./proxy:/app/proxy
+      - ./inspector:/app/inspector
+      - /app/frontend/node_modules
+    depends_on:
+      - dummy-target
+    networks:
+      - vci-network
+
+  dummy-target:
+    build:
+      context: ./dummy-target
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./dummy-target:/app
+      - /app/node_modules
+    networks:
+      - vci-network
+
+networks:
+  vci-network:
+    driver: bridge

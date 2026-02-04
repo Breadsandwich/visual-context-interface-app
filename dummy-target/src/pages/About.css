@@ -1,0 +1,82 @@
+.about {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.about h1 {
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.about-intro {
+  text-align: center;
+  font-size: 1.1rem;
+  color: #555;
+  margin-bottom: 3rem;
+  padding: 0 1rem;
+}
+
+.team {
+  margin-bottom: 3rem;
+}
+
+.team h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 2rem;
+}
+
+.team-member {
+  text-align: center;
+  padding: 2rem;
+  background: var(--card-background);
+  border-radius: 1rem;
+  border: 1px solid #e0e0e0;
+}
+
+.avatar {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.team-member h3 {
+  margin-bottom: 0.25rem;
+}
+
+.role {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.values h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.values-list {
+  list-style: none;
+}
+
+.values-list li {
+  padding: 1.5rem;
+  background: var(--card-background);
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid var(--primary-color);
+}
+
+.values-list strong {
+  display: block;
+  font-size: 1.1rem;
+  margin-bottom: 0.25rem;
+}
+
+.values-list span {
+  color: #666;
+}

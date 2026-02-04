@@ -182,7 +182,7 @@ visual-context-interface-app/
     "id": "",
     "classes": ["btn", "primary"]
   },
-  "visual": "data:image/png;base64,...",
+  "visual": "data:image/webp;base64,...",
   "prompt": "Move this button 10px to the left"
 }
 ```
@@ -195,6 +195,21 @@ visual-context-interface-app/
 | Proxy | Python, FastAPI, httpx, BeautifulSoup4 |
 | Screenshots | html2canvas |
 | Containerization | Docker, Docker Compose |
+
+## Challenges
+
+### Screenshot Payload Size
+
+**Problem**: PNG format screenshots produced base64 data too large for Claude's context window.
+
+**Solution**: Switched to WebP format with JPEG fallback.
+
+- WebP offers ~30% better compression than PNG
+- Quality set to 0.8 for balance of size vs clarity
+- Max dimensions capped at 1920x1080
+- Fallback to JPEG for browsers without WebP support
+
+**Code location**: `inspector/inspector.js:340-341`
 
 ## License
 

@@ -6,7 +6,7 @@ import './Viewport.css'
 
 export function Viewport() {
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const { mode } = useInspectorStore()
+  const { mode, refreshKey, currentRoute } = useInspectorStore()
   const { captureScreenshot } = usePostMessage(iframeRef)
 
   const { containerRef, isSelecting, selectionRect, handleMouseDown } = useAreaSelection({
@@ -24,8 +24,9 @@ export function Viewport() {
         onMouseDown={mode === 'screenshot' ? handleMouseDown : undefined}
       >
         <iframe
+          key={refreshKey}
           ref={iframeRef}
-          src="/proxy/"
+          src={`/proxy${currentRoute}`}
           className={`viewport-iframe ${mode === 'screenshot' ? 'no-pointer-events' : ''}`}
           title="Target Application"
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"

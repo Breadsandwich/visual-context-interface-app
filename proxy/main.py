@@ -72,7 +72,7 @@ async def proxy_request(path: str, request: Request):
     if ".." in path:
         return Response(content="Invalid path", status_code=400)
 
-    target_url = f"{get_target_url()}/proxy/{path}"
+    target_url = f"{get_target_url()}/{path}"
 
     # Build query string
     if request.query_params:
@@ -116,8 +116,14 @@ async def proxy_request(path: str, request: Request):
             # Build response headers
             response_headers = {}
             for key, value in response.headers.items():
-                # Skip headers that shouldn't be forwarded
-                if key.lower() not in ["content-encoding", "content-length", "transfer-encoding"]:
+                # Skip headers that shouldn't be forwarded (including security headers we override)
+                if key.lower() not in [
+                    "content-encoding",
+                    "content-length",
+                    "transfer-encoding",
+                    "content-security-policy",
+                    "x-frame-options",
+                ]:
                     response_headers[key] = value
 
             # Add security headers for iframe embedding

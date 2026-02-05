@@ -78,6 +78,8 @@ TARGET_HOST=host.docker.internal TARGET_PORT=3000 docker-compose up
 
 Replace `3000` with your app's port. Use `host.docker.internal` to reference apps running on your host machine.
 
+**Note**: The proxy automatically strips `Content-Security-Policy` and `X-Frame-Options` headers from proxied responses, allowing your app to be embedded in the inspector's iframe regardless of its original security headers.
+
 ## Local Development Setup
 
 ### 1. Frontend (React/Vite)

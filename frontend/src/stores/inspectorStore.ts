@@ -11,6 +11,7 @@ interface InspectorState {
   isInspectorReady: boolean
   isSidebarOpen: boolean
   clearSelectionTrigger: number
+  refreshKey: number
 
   setMode: (mode: InspectorMode) => void
   setSelectedElement: (element: ElementContext | null) => void
@@ -25,6 +26,7 @@ interface InspectorState {
   openSidebar: () => void
   closeSidebar: () => void
   toggleSidebar: () => void
+  refreshIframe: () => void
 }
 
 export const useInspectorStore = create<InspectorState>((set, get) => ({
@@ -37,6 +39,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   isInspectorReady: false,
   isSidebarOpen: false,
   clearSelectionTrigger: 0,
+  refreshKey: 0,
 
   setMode: (mode) => set({ mode }),
 
@@ -50,10 +53,15 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     isSidebarOpen: data !== null ? true : get().isSidebarOpen
   }),
 
-  setCurrentRoute: (route, title) => set({
-    currentRoute: route,
-    pageTitle: title ?? get().pageTitle
-  }),
+  setCurrentRoute: (route, title) => {
+    const normalizedRoute = route.startsWith('/proxy')
+      ? route.slice('/proxy'.length) || '/'
+      : route
+    return set({
+      currentRoute: normalizedRoute,
+      pageTitle: title ?? get().pageTitle
+    })
+  },
 
   setUserPrompt: (prompt) => set({ userPrompt: prompt }),
 
@@ -77,6 +85,11 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   openSidebar: () => set({ isSidebarOpen: true }),
   closeSidebar: () => set({ isSidebarOpen: false }),
   toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+  refreshIframe: () => set((state) => ({
+    refreshKey: state.refreshKey + 1,
+    isInspectorReady: false,
+    selectedElement: null
+  })),
 
   generatePayload: () => {
     const state = get()

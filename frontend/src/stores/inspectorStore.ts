@@ -9,6 +9,8 @@ interface InspectorState {
   pageTitle: string
   userPrompt: string
   isInspectorReady: boolean
+  isSidebarOpen: boolean
+  clearSelectionTrigger: number
 
   setMode: (mode: InspectorMode) => void
   setSelectedElement: (element: ElementContext | null) => void
@@ -17,7 +19,12 @@ interface InspectorState {
   setUserPrompt: (prompt: string) => void
   setInspectorReady: (ready: boolean) => void
   clearSelection: () => void
+  clearScreenshot: () => void
+  resetAll: () => void
   generatePayload: () => OutputPayload
+  openSidebar: () => void
+  closeSidebar: () => void
+  toggleSidebar: () => void
 }
 
 export const useInspectorStore = create<InspectorState>((set, get) => ({
@@ -28,12 +35,20 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   pageTitle: '',
   userPrompt: '',
   isInspectorReady: false,
+  isSidebarOpen: false,
+  clearSelectionTrigger: 0,
 
   setMode: (mode) => set({ mode }),
 
-  setSelectedElement: (element) => set({ selectedElement: element }),
+  setSelectedElement: (element) => set({
+    selectedElement: element,
+    isSidebarOpen: element !== null ? true : get().isSidebarOpen
+  }),
 
-  setScreenshotData: (data) => set({ screenshotData: data }),
+  setScreenshotData: (data) => set({
+    screenshotData: data,
+    isSidebarOpen: data !== null ? true : get().isSidebarOpen
+  }),
 
   setCurrentRoute: (route, title) => set({
     currentRoute: route,
@@ -48,6 +63,20 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     selectedElement: null,
     screenshotData: null
   }),
+
+  clearScreenshot: () => set({ screenshotData: null }),
+
+  resetAll: () => set((state) => ({
+    selectedElement: null,
+    screenshotData: null,
+    userPrompt: '',
+    isSidebarOpen: false,
+    clearSelectionTrigger: state.clearSelectionTrigger + 1
+  })),
+
+  openSidebar: () => set({ isSidebarOpen: true }),
+  closeSidebar: () => set({ isSidebarOpen: false }),
+  toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
 
   generatePayload: () => {
     const state = get()

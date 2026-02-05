@@ -7,7 +7,7 @@ Build a **Dockerized development tool** that:
 2. Injects an inspector script to enable DOM element selection and highlighting
 3. Allows screenshot capture of specific regions
 4. Generates a structured JSON payload with route, element context, visual data, and user instructions
-5. Outputs payload to console and clipboard for use with Claude Code
+5. Outputs payload to console and clipboard for use with _ Code
 
 **Key Constraint**: The target application must NOT require any code changes or dependencies.
 

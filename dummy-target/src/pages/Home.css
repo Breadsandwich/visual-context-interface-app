@@ -12,15 +12,19 @@
 }
 
 .hero-title {
-  font-size: 3rem;
+  font-size: 1.25rem;
   margin-bottom: 1rem;
   color: white;
+  font-style: italic;
+  text-decoration: underline;
 }
 
 .hero-subtitle {
   font-size: 1.25rem;
   opacity: 0.9;
   margin-bottom: 2rem;
+  font-style: italic;
+  text-decoration: underline;
 }
 
 .cta-button {
@@ -30,9 +34,10 @@
   padding: 1rem 2rem;
   font-size: 1rem;
   font-weight: 600;
-  border-radius: 0.5rem;
+  border-radius: 0;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
+  margin-left: 500px;
 }
 
 .cta-button:hover {

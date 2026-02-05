@@ -22,11 +22,13 @@ function isElementContext(data: unknown): data is ElementContext {
 
 export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | null>) {
   const {
+    setMode,
     setSelectedElement,
     setScreenshotData,
     setCurrentRoute,
     setInspectorReady,
-    mode
+    mode,
+    clearSelectionTrigger
   } = useInspectorStore()
 
   // Handle messages from inspector with origin validation
@@ -59,6 +61,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
             // Validate it's a valid data URL
             if (data.payload.imageData.startsWith('data:image/')) {
               setScreenshotData(data.payload.imageData)
+              setMode('interaction')
             }
           }
           break
@@ -76,7 +79,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [setSelectedElement, setScreenshotData, setCurrentRoute, setInspectorReady])
+  }, [setMode, setSelectedElement, setScreenshotData, setCurrentRoute, setInspectorReady])
 
   // Send command to inspector with origin restriction
   const sendCommand = useCallback((command: InspectorCommand) => {
@@ -95,6 +98,16 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
       payload: { mode }
     })
   }, [mode, sendCommand])
+
+  // Clear iframe selection when triggered
+  useEffect(() => {
+    if (clearSelectionTrigger > 0) {
+      sendCommand({
+        type: 'INSPECTOR_COMMAND',
+        action: 'CLEAR_SELECTION'
+      })
+    }
+  }, [clearSelectionTrigger, sendCommand])
 
   const setInspectorMode = useCallback((newMode: InspectorMode) => {
     sendCommand({

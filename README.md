@@ -204,13 +204,9 @@ visual-context-interface-app/
 
 **Solution**: Switched to WebP format with JPEG fallback.
 
-- WebP offers ~30% better compression than PNG
+- WebP offers better compression than PNG
 - Quality set to 0.8 for balance of size vs clarity
 - Max dimensions capped at 1920x1080
 - Fallback to JPEG for browsers without WebP support
 
 **Code location**: `inspector/inspector.js:340-341`
-
-## License
-
-MIT

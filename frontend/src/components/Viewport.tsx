@@ -6,7 +6,7 @@ import './Viewport.css'
 
 export function Viewport() {
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const { mode, currentRoute, isInspectorReady } = useInspectorStore()
+  const { mode } = useInspectorStore()
   const { captureScreenshot } = usePostMessage(iframeRef)
 
   const { containerRef, isSelecting, selectionRect, handleMouseDown } = useAreaSelection({
@@ -18,14 +18,6 @@ export function Viewport() {
 
   return (
     <div className="viewport">
-      <div className="viewport-header">
-        <div className="viewport-url">
-          <span className="viewport-status">
-            {isInspectorReady ? '🟢' : '🔴'}
-          </span>
-          <span className="viewport-route">{currentRoute || '/'}</span>
-        </div>
-      </div>
       <div
         ref={containerRef}
         className={`viewport-container ${mode === 'screenshot' ? 'screenshot-mode' : ''}`}

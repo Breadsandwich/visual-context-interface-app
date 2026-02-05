@@ -1,12 +1,20 @@
 """HTML injection and path rewriting utilities."""
 
+import json
 import re
 from bs4 import BeautifulSoup
 
 
-def inject_inspector_script(html: str) -> str:
+def _json_dumps_html_safe(value: str) -> str:
+    """Serialize value to JSON, escaping characters unsafe inside <script> tags."""
+    return json.dumps(value).replace("<", "\\u003c").replace(">", "\\u003e")
+
+
+def inject_inspector_script(html: str, parent_origin: str = "") -> str:
     """Inject inspector scripts before </body> tag."""
-    injection = '''
+    origin_json = _json_dumps_html_safe(parent_origin)
+    injection = f'''
+    <script>window.__INSPECTOR_PARENT_ORIGIN__ = {origin_json};</script>
     <script src="/inspector/html2canvas.min.js"></script>
     <script src="/inspector/inspector.js"></script>
     '''

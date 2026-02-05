@@ -19,13 +19,17 @@
   const MAX_SCREENSHOT_HEIGHT = 1080;
   const SCREENSHOT_QUALITY = 0.8;
 
+  // Matches modern CSS color functions unsupported by html2canvas v1.x
+  // Covers: oklab(), oklch(), lab(), lch(), color-mix(), color() with up to 2 levels of nested parens
+  const UNSUPPORTED_COLOR_RE = /\b(?:oklab|oklch|lab|lch|color-mix|color)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)/gi;
+
   // Inspector state
   const state = {
     mode: 'interaction', // 'interaction' | 'inspection' | 'screenshot'
     hoveredElement: null,
     selectedElement: null,
     initialized: false,
-    parentOrigin: window.location.origin,
+    parentOrigin: window.__INSPECTOR_PARENT_ORIGIN__ || window.location.origin,
     routeCheckInterval: null
   };
 
@@ -198,7 +202,7 @@
    * Send message to parent window with origin restriction
    */
   function sendToParent(action, payload) {
-    // Use same origin for security - content is served through proxy at same origin
+    // Target the parent origin (injected by proxy, or same-origin fallback)
     window.parent.postMessage({
       type: 'INSPECTOR_EVENT',
       action: action,
@@ -295,6 +299,113 @@
   }
 
   /**
+   * Replace unsupported CSS color functions with 'inherit' in a CSS text string.
+   */
+  function sanitizeCssText(cssText) {
+    return cssText.replace(UNSUPPORTED_COLOR_RE, 'inherit');
+  }
+
+  /**
+   * Pre-sanitize stylesheets in the ORIGINAL document before html2canvas runs.
+   * html2canvas reads cssRules from the original document's stylesheets before
+   * the onclone callback fires, so onclone-only sanitization is insufficient.
+   *
+   * Returns an array of restore operations to undo the changes.
+   */
+  function presanitizeStylesheets() {
+    const restoreOps = [];
+
+    // Sanitize <link rel="stylesheet"> elements by replacing with inline <style>
+    document.querySelectorAll('link[rel="stylesheet"]').forEach(function(link) {
+      try {
+        const sheet = link.sheet;
+        if (!sheet || !sheet.cssRules) return;
+
+        const cssText = Array.from(sheet.cssRules)
+          .map(function(rule) { return rule.cssText; })
+          .join('\n');
+
+        const sanitized = sanitizeCssText(cssText);
+        if (sanitized === cssText) return;
+
+        const inlineStyle = document.createElement('style');
+        inlineStyle.textContent = sanitized;
+        inlineStyle.dataset.inspectorReplace = 'true';
+
+        if (link.media) {
+          inlineStyle.setAttribute('media', link.media);
+        }
+
+        link.parentNode.insertBefore(inlineStyle, link);
+        link.parentNode.removeChild(link);
+
+        restoreOps.push({ type: 'link', replacement: inlineStyle, original: link });
+      } catch (_e) {
+        // Cross-origin stylesheets will throw on cssRules access -- skip them
+      }
+    });
+
+    // Sanitize existing <style> elements in-place
+    document.querySelectorAll('style:not([data-inspector-replace])').forEach(function(style) {
+      if (!style.textContent) return;
+
+      const original = style.textContent;
+      const sanitized = sanitizeCssText(original);
+      if (sanitized === original) return;
+
+      style.textContent = sanitized;
+
+      restoreOps.push({ type: 'style', element: style, original: original });
+    });
+
+    return restoreOps;
+  }
+
+  /**
+   * Restore stylesheets to their original state after screenshot capture.
+   */
+  function restoreStylesheets(restoreOps) {
+    restoreOps.forEach(function(op) {
+      try {
+        if (op.type === 'link') {
+          const parent = op.replacement.parentNode;
+          if (parent) {
+            parent.insertBefore(op.original, op.replacement);
+            parent.removeChild(op.replacement);
+          } else {
+            document.head.appendChild(op.original);
+          }
+        } else if (op.type === 'style') {
+          op.element.textContent = op.original;
+        }
+      } catch (_e) {
+        // Best-effort restore
+      }
+    });
+  }
+
+  /**
+   * Sanitize CSS color functions not supported by html2canvas (oklab, oklch, etc.)
+   * from the cloned document. Used as onclone safety net for inline styles.
+   */
+  function sanitizeUnsupportedColors(doc) {
+    // Sanitize <style> elements
+    doc.querySelectorAll('style').forEach(function(style) {
+      if (style.textContent) {
+        style.textContent = sanitizeCssText(style.textContent);
+      }
+    });
+
+    // Sanitize inline styles
+    doc.querySelectorAll('[style]').forEach(function(el) {
+      const styleAttr = el.getAttribute('style');
+      if (styleAttr) {
+        el.setAttribute('style', sanitizeCssText(styleAttr));
+      }
+    });
+  }
+
+  /**
    * Capture screenshot of element or region with compression
    */
   async function captureScreenshot(options = {}) {
@@ -303,13 +414,20 @@
       return;
     }
 
+    // Pre-sanitize original document stylesheets so html2canvas reads clean CSS
+    const restoreOps = presanitizeStylesheets();
+
     try {
       let target = document.body;
-      let captureOptions = {
+      const captureOptions = {
         useCORS: true,
         allowTaint: true,
         logging: false,
-        backgroundColor: null
+        backgroundColor: null,
+        onclone: function(clonedDoc) {
+          // Safety net for inline styles and any rules missed by pre-sanitization
+          sanitizeUnsupportedColors(clonedDoc);
+        }
       };
 
       if (options.selector) {
@@ -348,6 +466,8 @@
 
     } catch (error) {
       sendToParent('SCREENSHOT_ERROR', { error: error.message, stack: error.stack });
+    } finally {
+      restoreStylesheets(restoreOps);
     }
   }
 

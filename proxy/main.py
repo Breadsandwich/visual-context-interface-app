@@ -124,7 +124,7 @@ async def proxy_request(path: str, request: Request):
             if "text/html" in content_type:
                 html_content = content.decode("utf-8", errors="replace")
                 html_content = rewrite_asset_paths(html_content)
-                html_content = inject_inspector_script(html_content)
+                html_content = inject_inspector_script(html_content, FRONTEND_ORIGIN)
                 content = html_content.encode("utf-8")
 
             # Build response headers
@@ -141,9 +141,10 @@ async def proxy_request(path: str, request: Request):
                     response_headers[key] = value
 
             # Add security headers for iframe embedding
-            response_headers["X-Frame-Options"] = "SAMEORIGIN"
             response_headers["Access-Control-Allow-Origin"] = FRONTEND_ORIGIN
             response_headers["Content-Security-Policy"] = f"frame-ancestors 'self' {FRONTEND_ORIGIN}"
+            if not _is_external_target:
+                response_headers["X-Frame-Options"] = "SAMEORIGIN"
 
             return Response(
                 content=content,
@@ -164,7 +165,7 @@ async def proxy_request(path: str, request: Request):
                 content="Request timed out",
                 status_code=504,
             )
-        except Exception as e:
+        except Exception:
             logger.exception("Proxy error occurred")
             return Response(
                 content="An internal error occurred",
@@ -176,3 +177,92 @@ async def proxy_request(path: str, request: Request):
 async def proxy_root(request: Request):
     """Proxy root path."""
     return await proxy_request("", request)
+
+
+if _is_external_target:
+
+    # Paths that should never be forwarded to the target app
+    _RESERVED_PREFIXES = ("health", "proxy", "inspector", "docs", "openapi.json")
+
+    @app.api_route(
+        "/{path:path}",
+        methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    )
+    async def forward_target_assets(path: str, request: Request):
+        """Forward non-proxy requests to the target app.
+
+        When the iframe is loaded cross-origin, Vite ES module imports use
+        absolute paths like /node_modules/.vite/deps/react.js or /@vite/client.
+        These arrive at the FastAPI server (port 8000) without the /proxy/ prefix
+        and must be forwarded to the target application without HTML injection.
+        """
+        first_segment = path.split("/")[0] if path else ""
+        if first_segment in _RESERVED_PREFIXES:
+            return Response(content="Not found", status_code=404)
+
+        decoded_path = unquote(path)
+        if ".." in path or ".." in decoded_path:
+            return Response(content="Invalid path", status_code=400)
+
+        target_url = f"{get_target_url()}/{path}"
+
+        if request.query_params:
+            target_url += f"?{request.query_params}"
+
+        headers = dict(request.headers)
+        headers.pop("host", None)
+        headers.pop("origin", None)
+        headers.pop("referer", None)
+
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+            try:
+                body = await request.body() if request.method in ("POST", "PUT", "PATCH") else None
+
+                response = await client.request(
+                    method=request.method,
+                    url=target_url,
+                    headers=headers,
+                    content=body,
+                )
+
+                content_type = response.headers.get("content-type", "")
+
+                response_headers = {}
+                for key, value in response.headers.items():
+                    if key.lower() not in [
+                        "content-encoding",
+                        "content-length",
+                        "transfer-encoding",
+                        "content-security-policy",
+                        "x-frame-options",
+                    ]:
+                        response_headers[key] = value
+
+                response_headers["Access-Control-Allow-Origin"] = FRONTEND_ORIGIN
+                response_headers["Content-Security-Policy"] = f"frame-ancestors 'self' {FRONTEND_ORIGIN}"
+
+                return Response(
+                    content=response.content,
+                    status_code=response.status_code,
+                    headers=response_headers,
+                    media_type=content_type.split(";")[0] if content_type else None,
+                )
+
+            except httpx.ConnectError:
+                logger.error(f"Connection error to target: {TARGET_HOST}:{TARGET_PORT}")
+                return Response(
+                    content="Service temporarily unavailable",
+                    status_code=502,
+                )
+            except httpx.TimeoutException:
+                logger.error("Request to target timed out")
+                return Response(
+                    content="Request timed out",
+                    status_code=504,
+                )
+            except Exception:
+                logger.exception("Forward error occurred")
+                return Response(
+                    content="An internal error occurred",
+                    status_code=500,
+                )

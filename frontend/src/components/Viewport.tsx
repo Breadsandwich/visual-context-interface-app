@@ -4,6 +4,8 @@ import { usePostMessage } from '../hooks/usePostMessage'
 import { useAreaSelection } from '../hooks/useAreaSelection'
 import './Viewport.css'
 
+const proxyUrl = import.meta.env.VITE_PROXY_URL || ''
+
 export function Viewport() {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const { mode } = useInspectorStore()
@@ -25,7 +27,7 @@ export function Viewport() {
       >
         <iframe
           ref={iframeRef}
-          src="/proxy/"
+          src={`${proxyUrl}/proxy/`}
           className={`viewport-iframe ${mode === 'screenshot' ? 'no-pointer-events' : ''}`}
           title="Target Application"
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"

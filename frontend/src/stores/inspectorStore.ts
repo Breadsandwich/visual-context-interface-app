@@ -67,6 +67,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   clearScreenshot: () => set({ screenshotData: null }),
 
   resetAll: () => set((state) => ({
+    mode: 'interaction',
     selectedElement: null,
     screenshotData: null,
     userPrompt: '',

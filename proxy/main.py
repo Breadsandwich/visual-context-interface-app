@@ -2,6 +2,8 @@
 
 import logging
 import os
+from urllib.parse import unquote
+
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -31,6 +33,10 @@ TARGET_HOST = os.getenv("TARGET_HOST", "localhost")
 TARGET_PORT = os.getenv("TARGET_PORT", "3001")
 INSPECTOR_DIR = (Path(__file__).parent.parent / "inspector").resolve()
 
+# When True, the proxy strips the /proxy/ prefix before forwarding.
+# The bundled dummy-target serves from /proxy/ so it needs the prefix kept.
+_is_external_target = TARGET_HOST not in ("dummy-target", "localhost", "127.0.0.1")
+
 
 def get_target_url() -> str:
     """Get the base URL for the target application."""
@@ -40,7 +46,11 @@ def get_target_url() -> str:
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "target": f"{TARGET_HOST}:{TARGET_PORT}",
+        "external": _is_external_target,
+    }
 
 
 @app.get("/inspector/{filename:path}")
@@ -68,11 +78,15 @@ async def serve_inspector(filename: str):
 @app.api_route("/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def proxy_request(path: str, request: Request):
     """Proxy requests to target application with script injection."""
-    # Validate path doesn't contain traversal attempts
-    if ".." in path:
+    # Validate path doesn't contain traversal attempts (check decoded form too)
+    decoded_path = unquote(path)
+    if ".." in path or ".." in decoded_path:
         return Response(content="Invalid path", status_code=400)
 
-    target_url = f"{get_target_url()}/proxy/{path}"
+    if _is_external_target:
+        target_url = f"{get_target_url()}/{path}"
+    else:
+        target_url = f"{get_target_url()}/proxy/{path}"
 
     # Build query string
     if request.query_params:
@@ -117,7 +131,13 @@ async def proxy_request(path: str, request: Request):
             response_headers = {}
             for key, value in response.headers.items():
                 # Skip headers that shouldn't be forwarded
-                if key.lower() not in ["content-encoding", "content-length", "transfer-encoding"]:
+                if key.lower() not in [
+                    "content-encoding",
+                    "content-length",
+                    "transfer-encoding",
+                    "content-security-policy",
+                    "x-frame-options",
+                ]:
                     response_headers[key] = value
 
             # Add security headers for iframe embedding

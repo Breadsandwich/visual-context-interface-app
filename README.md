@@ -70,13 +70,21 @@ A Dockerized development tool that enables visual DOM inspection and screenshot 
 
 ### Inspecting Your Own App
 
-To inspect a different React application instead of the dummy target:
+To point the tool at a local app running on your machine (e.g. a Next.js app on port 3000):
 
-```bash
-TARGET_HOST=host.docker.internal TARGET_PORT=3000 docker-compose up
-```
+1. **Start your app** as you normally would (`npm run dev`, etc.) and confirm it loads in your browser
 
-Replace `3000` with your app's port. Use `host.docker.internal` to reference apps running on your host machine.
+2. **Start the tool** with two environment variables:
+
+   ```bash
+   TARGET_HOST=host.docker.internal TARGET_PORT=3000 docker-compose up
+   ```
+
+   Replace `3000` with whatever port your app runs on.
+
+3. **Open** http://localhost:5173 — your app should appear inside the iframe with inspection tools available
+
+`host.docker.internal` is a special DNS name that lets the Docker container reach your Mac's localhost. The proxy automatically detects an external target and strips the `/proxy/` path prefix so requests forward cleanly to your app's root.
 
 ## Local Development Setup
 

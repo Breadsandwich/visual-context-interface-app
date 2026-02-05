@@ -8,7 +8,9 @@ __pycache__/
 *$py.class
 .Python
 venv/
+.venv/
 .env
+.pytest_cache/
 
 # Build outputs
 dist/

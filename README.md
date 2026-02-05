@@ -212,3 +212,37 @@ visual-context-interface-app/
 - Fallback to JPEG for browsers without WebP support
 
 **Code location**: `inspector/inspector.js:340-341`
+
+## Troubleshooting
+
+### Proxy Cannot Connect to Your Target App
+
+**Problem**: When using Docker to inspect your own app running on the host machine, you get connection errors or the proxy fails to reach the target.
+
+**Cause**: Most dev servers (Vite, Next.js, Create React App, etc.) bind to `localhost` (127.0.0.1) by default. This means they only accept connections from the same machine. Docker containers are isolated, so even with `host.docker.internal`, the connection is refused because the server isn't listening on the network interface Docker uses.
+
+**Solution**: Start your target app with the host flag to bind to all network interfaces:
+
+```bash
+# Vite
+npm run dev -- --host 0.0.0.0
+
+# Next.js
+npm run dev -- -H 0.0.0.0
+
+# Create React App
+HOST=0.0.0.0 npm start
+```
+
+Then run the visual context tool:
+
+```bash
+TARGET_HOST=host.docker.internal TARGET_PORT=3000 docker-compose up
+```
+
+**When to use `0.0.0.0`**:
+- You're running Docker and your target app is on the host machine
+- You want to access your dev server from other devices on your network
+- You're using `host.docker.internal` as the `TARGET_HOST`
+
+**Security note**: Binding to `0.0.0.0` exposes your dev server to your local network. This is fine for development but should not be used in production.

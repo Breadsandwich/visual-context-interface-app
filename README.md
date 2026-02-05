@@ -70,13 +70,26 @@ A Dockerized development tool that enables visual DOM inspection and screenshot 
 
 ### Inspecting Your Own App
 
-To inspect a different React application instead of the dummy target:
+To point the tool at a local app running on your machine (e.g. a Vite React app on port 3000):
 
-```bash
-TARGET_HOST=host.docker.internal TARGET_PORT=3000 docker-compose up
-```
+1. **Start your app** as you normally would (`npm run dev`, etc.) and confirm it loads in your browser
 
-Replace `3000` with your app's port. Use `host.docker.internal` to reference apps running on your host machine.
+2. **Start the tool** with two environment variables:
+
+   ```bash
+   TARGET_HOST=host.docker.internal TARGET_PORT=3000 docker-compose up --build
+   ```
+
+   Replace `3000` with whatever port your app runs on.
+
+3. **Open** http://localhost:5173 — your app should appear inside the iframe with inspection tools available
+
+**How it works:**
+
+- `host.docker.internal` is a special DNS name that lets the Docker container reach your Mac's localhost
+- The proxy detects an external target and strips the `/proxy/` path prefix so requests forward cleanly to your app's root
+- The iframe loads cross-origin (`http://localhost:8000`) to isolate ES module caches between the VCI frontend and your app, preventing framework collisions
+- A catch-all route on the proxy forwards Vite module requests (`/@vite/client`, `/node_modules/.vite/deps/...`) to your app so ES imports resolve correctly
 
 ## Local Development Setup
 
@@ -210,3 +223,20 @@ visual-context-interface-app/
 - Fallback to JPEG for browsers without WebP support
 
 **Code location**: `inspector/inspector.js:340-341`
+
+### Dual React Collision When Proxying External Vite Apps
+
+**Problem**: When pointing the tool at an external Vite React app (e.g. `TARGET_HOST=host.docker.internal`), the target app crashed with "Invalid hook call" errors. React hooks require exactly one copy of React, but two were loading simultaneously.
+
+**Root cause**: The iframe was loaded same-origin through Vite's dev proxy (`/proxy/`), which made it share the browser's ES module cache with the VCI frontend. Both apps use Vite, so when the target app's JavaScript imported React from `/node_modules/.vite/deps/react.js`, the browser served the VCI frontend's React instead of the target's. Two React instances collided, breaking hooks.
+
+The HTML `rewrite_asset_paths` function only rewrites `href`/`src` attributes in HTML tags. It cannot rewrite ES `import` statements inside JavaScript modules (e.g. `import React from "/node_modules/.vite/deps/react.js"`), so path-rewriting alone could not solve this.
+
+**Solution**: Load the iframe cross-origin to completely isolate module caches.
+
+- When `VITE_PROXY_URL` is set (via docker-compose), the iframe loads from `http://localhost:8000/proxy/` instead of `/proxy/`, giving it a different origin and its own ES module cache
+- A `__INSPECTOR_PARENT_ORIGIN__` global is injected into the target HTML so the inspector script can send postMessages to the correct parent origin
+- A catch-all route on the FastAPI proxy forwards Vite module requests (e.g. `/@vite/client`, `/node_modules/.vite/deps/react.js`) from the iframe's origin to the target app without HTML injection
+- When `VITE_PROXY_URL` is unset, the iframe falls back to same-origin `/proxy/`, maintaining backward compatibility with the bundled dummy-target
+
+**Code locations**: `frontend/src/components/Viewport.tsx`, `frontend/src/hooks/usePostMessage.ts`, `proxy/injection.py`, `proxy/main.py`, `inspector/inspector.js`

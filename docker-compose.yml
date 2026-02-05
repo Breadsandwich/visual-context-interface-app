@@ -12,13 +12,18 @@ services:
       - TARGET_HOST=${TARGET_HOST:-dummy-target}
       - TARGET_PORT=${TARGET_PORT:-3001}
       - VITE_PROXY_URL=http://localhost:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./frontend:/app/frontend
       - ./proxy:/app/proxy
       - ./inspector:/app/inspector
       - /app/frontend/node_modules
     depends_on:
-      - dummy-target
+      dummy-target:
+        condition: service_started
+        # Not required when pointing to an external target via TARGET_HOST
+        required: false
     networks:
       - vci-network
 

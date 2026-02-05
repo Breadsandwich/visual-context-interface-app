@@ -20,6 +20,18 @@ function isElementContext(data: unknown): data is ElementContext {
   )
 }
 
+function parseProxyOrigin(): string {
+  const url = import.meta.env.VITE_PROXY_URL as string | undefined
+  if (!url) return ''
+  try {
+    return new URL(url).origin
+  } catch {
+    return ''
+  }
+}
+
+const proxyOrigin = parseProxyOrigin()
+
 export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | null>) {
   const {
     setMode,
@@ -34,9 +46,9 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
   // Handle messages from inspector with origin validation
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Validate origin - only accept messages from same origin (proxied content)
+      // Validate origin - accept messages from same origin or proxy origin
       const expectedOrigin = window.location.origin
-      if (event.origin !== expectedOrigin) {
+      if (event.origin !== expectedOrigin && (!proxyOrigin || event.origin !== proxyOrigin)) {
         return
       }
 
@@ -66,6 +78,13 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
           }
           break
 
+        case 'SCREENSHOT_ERROR':
+          if (data.payload && 'error' in data.payload) {
+            console.error('[Inspector] Screenshot capture failed:', data.payload.error)
+          }
+          setMode('interaction')
+          break
+
         case 'ROUTE_CHANGED':
           if (data.payload && 'route' in data.payload && typeof data.payload.route === 'string') {
             const title = 'title' in data.payload && typeof data.payload.title === 'string'
@@ -84,8 +103,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
   // Send command to inspector with origin restriction
   const sendCommand = useCallback((command: InspectorCommand) => {
     if (iframeRef.current?.contentWindow) {
-      // Use same origin for security
-      const targetOrigin = window.location.origin
+      const targetOrigin = proxyOrigin || window.location.origin
       iframeRef.current.contentWindow.postMessage(command, targetOrigin)
     }
   }, [iframeRef])

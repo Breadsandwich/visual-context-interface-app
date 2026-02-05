@@ -2,7 +2,7 @@ import { useInspectorStore } from '../stores/inspectorStore'
 import './SelectionPreview.css'
 
 export function SelectionPreview() {
-  const { selectedElement, screenshotData, clearSelection, clearScreenshot } = useInspectorStore()
+  const { selectedElement, screenshotData, resetAll } = useInspectorStore()
 
   if (!selectedElement && !screenshotData) {
     return (
@@ -19,7 +19,7 @@ export function SelectionPreview() {
         <div className="element-info">
           <div className="info-header">
             <h3>Selected Element</h3>
-            <button className="clear-button" onClick={clearSelection} aria-label="Clear selected element">
+            <button className="clear-button" onClick={resetAll} aria-label="Clear selected element">
               Clear
             </button>
           </div>
@@ -62,7 +62,7 @@ export function SelectionPreview() {
         <div className="screenshot-preview">
           <div className="info-header">
             <h3>Screenshot</h3>
-            <button className="clear-button" onClick={clearScreenshot} aria-label="Clear screenshot">
+            <button className="clear-button" onClick={resetAll} aria-label="Clear screenshot">
               Clear
             </button>
           </div>

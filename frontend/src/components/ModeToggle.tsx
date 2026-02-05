@@ -4,7 +4,7 @@ import './ModeToggle.css'
 
 const modes: { value: InspectorMode; label: string; icon: string }[] = [
   { value: 'interaction', label: 'Interact', icon: '👆' },
-  { value: 'inspection', label: 'Inspect', icon: '🔍' },
+  { value: 'inspection', label: 'Inspect', icon: '🪄' },
   { value: 'screenshot', label: 'Screenshot', icon: '📸' }
 ]
 

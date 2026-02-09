@@ -55,8 +55,16 @@ export function FloatingWidget() {
         >
           <span className="widget-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              <path d="M15 4V2" />
+              <path d="M15 16v-2" />
+              <path d="M8 9h2" />
+              <path d="M20 9h2" />
+              <path d="M17.8 11.8L19 13" />
+              <path d="M15 9h.01" />
+              <path d="M17.8 6.2L19 5" />
+              <path d="M11 6.2L9.7 5" />
+              <path d="M11 11.8L9.7 13" />
+              <path d="M8 21l7.5-7.5" />
             </svg>
           </span>
         </button>

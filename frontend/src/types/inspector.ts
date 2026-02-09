@@ -44,7 +44,6 @@ export interface ScreenshotPayload {
 
 export interface RouteChangedPayload {
   route: string
-  title: string
 }
 
 export interface ReadyPayload {
@@ -70,15 +69,8 @@ export interface InspectorCommand {
   }
 }
 
-export interface PayloadImage {
-  filename: string
-  dataUrl: string
-}
-
 export interface OutputPayload {
-  _format: string
   route: string
-  pageTitle: string
   contexts: Array<{
     html: string
     selector: string
@@ -86,9 +78,8 @@ export interface OutputPayload {
     id: string
     classes: string[]
     elementPrompt: string
-    linkedImages: PayloadImage[]
   }>
-  externalImages: PayloadImage[]
+  externalImages: string[]
   visual: string | null
   visualPrompt: string
   prompt: string

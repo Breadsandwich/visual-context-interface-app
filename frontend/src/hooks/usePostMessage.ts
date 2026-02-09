@@ -87,10 +87,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
 
         case 'ROUTE_CHANGED':
           if (data.payload && 'route' in data.payload && typeof data.payload.route === 'string') {
-            const title = 'title' in data.payload && typeof data.payload.title === 'string'
-              ? data.payload.title
-              : undefined
-            setCurrentRoute(data.payload.route, title)
+            setCurrentRoute(data.payload.route)
           }
           break
       }

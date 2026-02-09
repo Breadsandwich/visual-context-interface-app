@@ -4,7 +4,7 @@ import './ImageUpload.css'
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const WEBP_QUALITY = 0.80
+const WEBP_QUALITY = 1.0
 
 function generateId(): string {
   return crypto.randomUUID()
@@ -164,7 +164,7 @@ export function ImageUpload() {
             <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           <span className="upload-text">Drop images or click to upload</span>
-          <span className="upload-hint">PNG, JPG, WebP — auto-converted to WebP (max 5MB)</span>
+          <span className="upload-hint">PNG, JPG, WebP — lossless WebP conversion (max 5MB)</span>
         </div>
       )}
 

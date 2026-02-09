@@ -18,6 +18,7 @@ export interface UploadedImage {
   dataUrl: string
   filename: string
   size: number
+  linkedElementSelector?: string
 }
 
 export interface InspectorEvent {
@@ -69,8 +70,15 @@ export interface InspectorCommand {
   }
 }
 
+export interface PayloadImage {
+  filename: string
+  dataUrl: string
+}
+
 export interface OutputPayload {
+  _format: string
   route: string
+  pageTitle: string
   contexts: Array<{
     html: string
     selector: string
@@ -78,8 +86,9 @@ export interface OutputPayload {
     id: string
     classes: string[]
     elementPrompt: string
+    linkedImages: PayloadImage[]
   }>
-  externalImages: string[]
+  externalImages: PayloadImage[]
   visual: string | null
   visualPrompt: string
   prompt: string

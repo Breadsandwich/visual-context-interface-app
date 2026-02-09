@@ -36,6 +36,7 @@ interface InspectorState {
   setCurrentRoute: (route: string, title?: string) => void
   setUserPrompt: (prompt: string) => void
   setInspectorReady: (ready: boolean) => void
+  linkImageToElement: (imageId: string, selector: string | null) => void
   clearSelection: () => void
   clearScreenshot: () => void
   resetAll: () => void
@@ -71,9 +72,15 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         (el) => el.selector !== element.selector
       )
       const { [element.selector]: _removed, ...remainingPrompts } = state.elementPrompts
+      const unlinkedImages = state.uploadedImages.map((img) =>
+        img.linkedElementSelector === element.selector
+          ? { ...img, linkedElementSelector: undefined }
+          : img
+      )
       return {
         selectedElements: filtered,
         elementPrompts: remainingPrompts,
+        uploadedImages: unlinkedImages,
         isSidebarOpen: filtered.length > 0 ? true : state.isSidebarOpen
       }
     }
@@ -89,11 +96,17 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
 
   removeSelectedElement: (selector) => set((state) => {
     const { [selector]: _removed, ...remainingPrompts } = state.elementPrompts
+    const unlinkedImages = state.uploadedImages.map((img) =>
+      img.linkedElementSelector === selector
+        ? { ...img, linkedElementSelector: undefined }
+        : img
+    )
     return {
       selectedElements: state.selectedElements.filter(
         (el) => el.selector !== selector
       ),
-      elementPrompts: remainingPrompts
+      elementPrompts: remainingPrompts,
+      uploadedImages: unlinkedImages
     }
   }),
 
@@ -103,9 +116,15 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     const cleanedPrompts = Object.fromEntries(
       Object.entries(state.elementPrompts).filter(([key]) => newSelectors.has(key))
     )
+    const unlinkedImages = state.uploadedImages.map((img) =>
+      img.linkedElementSelector && !newSelectors.has(img.linkedElementSelector)
+        ? { ...img, linkedElementSelector: undefined }
+        : img
+    )
     return {
       selectedElements: newElements,
-      elementPrompts: cleanedPrompts
+      elementPrompts: cleanedPrompts,
+      uploadedImages: unlinkedImages
     }
   }),
 
@@ -172,12 +191,23 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
 
   setInspectorReady: (ready) => set({ isInspectorReady: ready }),
 
-  clearSelection: () => set({
+  linkImageToElement: (imageId, selector) => set((state) => ({
+    uploadedImages: state.uploadedImages.map((img) =>
+      img.id === imageId
+        ? { ...img, linkedElementSelector: selector ?? undefined }
+        : img
+    )
+  })),
+
+  clearSelection: () => set((state) => ({
     selectedElements: [],
     elementPrompts: {},
     screenshotData: null,
-    screenshotPrompt: ''
-  }),
+    screenshotPrompt: '',
+    uploadedImages: state.uploadedImages.map((img) =>
+      img.linkedElementSelector ? { ...img, linkedElementSelector: undefined } : img
+    )
+  })),
 
   clearScreenshot: () => set({ screenshotData: null, screenshotPrompt: '' }),
 
@@ -199,17 +229,46 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
 
   generatePayload: () => {
     const state = get()
+
+    const selectedSelectors = new Set(state.selectedElements.map((el) => el.selector))
+    const linkedMap = new Map<string, Array<{ filename: string; dataUrl: string }>>()
+    const unlinkedImages: Array<{ filename: string; dataUrl: string }> = []
+
+    for (const img of state.uploadedImages) {
+      if (img.linkedElementSelector && selectedSelectors.has(img.linkedElementSelector)) {
+        const existing = linkedMap.get(img.linkedElementSelector) ?? []
+        linkedMap.set(img.linkedElementSelector, [
+          ...existing,
+          { filename: img.filename, dataUrl: img.dataUrl }
+        ])
+      } else {
+        unlinkedImages.push({ filename: img.filename, dataUrl: img.dataUrl })
+      }
+    }
+
     const payload: OutputPayload = {
+      _format: [
+        'Visual Context Interface payload v1.0.',
+        'route: the current URL path in the target app.',
+        'pageTitle: the document title of the target app page.',
+        'contexts[]: selected DOM elements with their outer HTML, CSS selectors, per-element instructions, and linkedImages (reference images the user linked to this specific element).',
+        'externalImages[]: user-uploaded reference images not linked to any specific element (filename + base64 dataUrl).',
+        'visual: a base64 screenshot of the target app viewport (or null).',
+        'visualPrompt: instructions specific to the screenshot.',
+        'prompt: the user\'s overall instruction for what to do with this context.'
+      ].join(' '),
       route: state.currentRoute,
+      pageTitle: state.pageTitle,
       contexts: state.selectedElements.map((el) => ({
         html: el.outerHTML,
         selector: el.selector,
         tagName: el.tagName,
         id: el.id,
         classes: el.classes,
-        elementPrompt: state.elementPrompts[el.selector] ?? ''
+        elementPrompt: state.elementPrompts[el.selector] ?? '',
+        linkedImages: linkedMap.get(el.selector) ?? []
       })),
-      externalImages: state.uploadedImages.map((img) => img.dataUrl),
+      externalImages: unlinkedImages,
       visual: state.screenshotData,
       visualPrompt: state.screenshotPrompt,
       prompt: state.userPrompt,

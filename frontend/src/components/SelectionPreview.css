@@ -72,11 +72,27 @@
   gap: 0.5rem;
 }
 
+.card-number {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(45, 138, 225, 0.2);
+  color: #5BA8F0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
 .card-selector {
   font-size: 0.75rem;
   color: #2D8AE1;
   word-break: break-all;
   line-height: 1.4;
+  min-width: 0;
 }
 
 .card-remove {

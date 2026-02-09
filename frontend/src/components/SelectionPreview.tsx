@@ -37,9 +37,10 @@ export function SelectionPreview() {
           </div>
 
           <div className="element-cards">
-            {selectedElements.map((element) => (
+            {selectedElements.map((element, index) => (
               <div key={element.selector} className="element-card">
                 <div className="card-top">
+                  <span className="card-number">{index + 1}</span>
                   <code className="card-selector">{element.selector}</code>
                   <button
                     className="card-remove"

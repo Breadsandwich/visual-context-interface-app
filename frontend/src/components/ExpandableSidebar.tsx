@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
 import { SelectionPreview } from './SelectionPreview'
+import { ImageUpload } from './ImageUpload'
 import { InstructionInput } from './InstructionInput'
 import { PayloadPreview } from './PayloadPreview'
 import './ExpandableSidebar.css'
@@ -44,6 +45,11 @@ export function ExpandableSidebar() {
         <div className="sidebar-section">
           <h3>Selection</h3>
           <SelectionPreview />
+        </div>
+
+        <div className="sidebar-section">
+          <h3>Reference Images</h3>
+          <ImageUpload />
         </div>
 
         <div className="sidebar-section">

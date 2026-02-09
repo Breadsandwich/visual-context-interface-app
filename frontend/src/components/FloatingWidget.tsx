@@ -7,7 +7,8 @@ export function FloatingWidget() {
     setMode,
     toggleSidebar,
     isSidebarOpen,
-    selectedElement,
+    selectedElements,
+    uploadedImages,
     screenshotData,
     userPrompt,
     isInspectorReady,
@@ -15,7 +16,7 @@ export function FloatingWidget() {
     resetAll
   } = useInspectorStore()
 
-  const hasContent = selectedElement !== null || screenshotData !== null || userPrompt !== ''
+  const hasContent = selectedElements.length > 0 || screenshotData !== null || userPrompt !== '' || uploadedImages.length > 0
 
   return (
     <div className={`floating-widget ${isSidebarOpen ? 'sidebar-open' : ''}`}>

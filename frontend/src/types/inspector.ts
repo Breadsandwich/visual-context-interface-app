@@ -13,6 +13,13 @@ export interface ElementContext {
   boundingRect: DOMRect
 }
 
+export interface UploadedImage {
+  id: string
+  dataUrl: string
+  filename: string
+  size: number
+}
+
 export interface InspectorEvent {
   type: 'INSPECTOR_EVENT'
   action: 'ELEMENT_SELECTED' | 'SCREENSHOT_CAPTURED' | 'ROUTE_CHANGED' | 'READY' | 'SCREENSHOT_ERROR'
@@ -64,14 +71,17 @@ export interface InspectorCommand {
 
 export interface OutputPayload {
   route: string
-  context: {
+  contexts: Array<{
     html: string
     selector: string
     tagName: string
     id: string
     classes: string[]
-  } | null
+    elementPrompt: string
+  }>
+  externalImages: string[]
   visual: string | null
+  visualPrompt: string
   prompt: string
   timestamp: string
 }

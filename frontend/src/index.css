@@ -11,6 +11,17 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* ADOM Design Tokens */
+  --adom-primary: #2D8AE1;
+  --adom-deep-space: #0C2739;
+  --adom-horizon: #00235A;
+  --adom-aqua: #2D8AE1;
+  --adom-neon: #00F26C;
+  --adom-gradient: linear-gradient(135deg, #2D8AE1, #00F26C);
+  --radius-pill: 50px;
+  --radius-input: 0.5rem;
+  --radius-card: 0.5rem;
 }
 
 * {

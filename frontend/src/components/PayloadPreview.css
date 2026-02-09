@@ -1,60 +1,32 @@
 .payload-preview {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
 }
 
-.payload-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.export-button {
-  padding: 0.625rem 1rem;
+.send-to-adom-button {
+  width: 100%;
+  padding: 0.75rem 1.5rem;
   border: none;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
+  border-radius: 50px;
+  font-size: 0.9375rem;
+  font-weight: 600;
   cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, #2D8AE1, #00F26C);
   transition: all 0.2s;
+  letter-spacing: 0.01em;
 }
 
-.export-button:disabled {
-  opacity: 0.5;
+.send-to-adom-button:hover:not(:disabled) {
+  box-shadow: 0 4px 20px rgba(45, 138, 225, 0.35);
+  transform: translateY(-1px);
+}
+
+.send-to-adom-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.send-to-adom-button:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
-}
-
-.export-button.primary {
-  background: #646cff;
-  color: #fff;
-}
-
-.export-button.primary:hover:not(:disabled) {
-  background: #535bf2;
-}
-
-.export-button.secondary {
-  background: #2a2a2a;
-  color: #fff;
-}
-
-.export-button.secondary:hover:not(:disabled) {
-  background: #3a3a3a;
-}
-
-.json-preview {
-  background: #1a1a1a;
-  border-radius: 0.375rem;
-  padding: 1rem;
-  overflow: auto;
-  max-height: 300px;
-}
-
-.json-preview pre {
-  font-size: 0.75rem;
-  color: #a5d6ff;
-  white-space: pre-wrap;
-  word-break: break-all;
-  margin: 0;
 }

@@ -240,3 +240,18 @@ The HTML `rewrite_asset_paths` function only rewrites `href`/`src` attributes in
 - When `VITE_PROXY_URL` is unset, the iframe falls back to same-origin `/proxy/`, maintaining backward compatibility with the bundled dummy-target
 
 **Code locations**: `frontend/src/components/Viewport.tsx`, `frontend/src/hooks/usePostMessage.ts`, `proxy/injection.py`, `proxy/main.py`, `inspector/inspector.js`
+
+### Image Data URI Size
+
+**Problem**: Uploaded external images (especially PNG screenshots) produced base64 data URIs too large for Claude Code's context window, preventing the AI from working with the generated prompt.
+
+**Solution**: Replace raw image data with lightweight "image codemaps" — structured metadata generated entirely client-side via canvas pixel analysis.
+
+- A Sobel edge detector extracts horizontal/vertical edge maps from a downscaled canvas (max 300px)
+- Dominant colors are clustered using greedy nearest-neighbor grouping on sampled pixels
+- Text regions are detected by scanning for strips where horizontal edge energy significantly exceeds vertical edge energy, then merged and filtered by aspect ratio
+- Font scale and weight are estimated from text region height ratios and stroke thickness sampling
+- A decision tree classifies content type (screenshot, photo, illustration, icon, chart, text-heavy) using edge sharpness, color count, complexity, transparency, and geometric patterns
+- The resulting codemap includes dimensions, aspect ratio, dominant colors, brightness, transparency, complexity, visual weight distribution, text prominence, font hints, and content type — giving the LLM semantic understanding of the image without seeing pixels
+
+**Code location**: `frontend/src/utils/imageAnalyzer.ts`

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { InspectorMode, ElementContext, UploadedImage, OutputPayload } from '../types/inspector'
+import type { InspectorMode, ElementContext, UploadedImage, ImageCodemap, OutputPayload } from '../types/inspector'
 
 const MAX_SELECTED_ELEMENTS = 10
 const MAX_UPLOADED_IMAGES = 10
@@ -35,6 +35,8 @@ interface InspectorState {
   setCurrentRoute: (route: string) => void
   setUserPrompt: (prompt: string) => void
   setInspectorReady: (ready: boolean) => void
+  setImageDescription: (imageId: string, description: string) => void
+  setImageCodemap: (imageId: string, codemap: ImageCodemap) => void
   linkImageToElement: (imageId: string, selector: string | null) => void
   clearSelection: () => void
   clearScreenshot: () => void
@@ -186,6 +188,18 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
 
   setInspectorReady: (ready) => set({ isInspectorReady: ready }),
 
+  setImageDescription: (imageId, description) => set((state) => ({
+    uploadedImages: state.uploadedImages.map((img) =>
+      img.id === imageId ? { ...img, description } : img
+    )
+  })),
+
+  setImageCodemap: (imageId, codemap) => set((state) => ({
+    uploadedImages: state.uploadedImages.map((img) =>
+      img.id === imageId ? { ...img, codemap } : img
+    )
+  })),
+
   linkImageToElement: (imageId, selector) => set((state) => ({
     uploadedImages: state.uploadedImages.map((img) =>
       img.id === imageId
@@ -236,7 +250,17 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         classes: el.classes,
         elementPrompt: state.elementPrompts[el.selector] ?? ''
       })),
-      externalImages: state.uploadedImages.map((img) => img.dataUrl),
+      externalImages: state.uploadedImages.map((img) => ({
+        filename: img.codemap?.filename ?? img.filename,
+        dimensions: img.codemap?.dimensions ?? 'unknown',
+        aspectRatio: img.codemap?.aspectRatio ?? 'unknown',
+        fileSize: img.codemap?.fileSize ?? `${img.size} B`,
+        dominantColors: img.codemap?.dominantColors ?? [],
+        brightness: img.codemap?.brightness ?? 'medium',
+        hasTransparency: img.codemap?.hasTransparency ?? false,
+        description: img.description ?? '',
+        linkedElementSelector: img.linkedElementSelector,
+      })),
       visual: state.screenshotData,
       visualPrompt: state.screenshotPrompt,
       prompt: state.userPrompt,

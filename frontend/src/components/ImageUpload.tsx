@@ -1,5 +1,6 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
+import { analyzeImage } from '../utils/imageAnalyzer'
 import './ImageUpload.css'
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
@@ -40,6 +41,8 @@ export function ImageUpload() {
   const addUploadedImage = useInspectorStore((s) => s.addUploadedImage)
   const removeUploadedImage = useInspectorStore((s) => s.removeUploadedImage)
   const linkImageToElement = useInspectorStore((s) => s.linkImageToElement)
+  const setImageDescription = useInspectorStore((s) => s.setImageDescription)
+  const setImageCodemap = useInspectorStore((s) => s.setImageCodemap)
   const showToast = useInspectorStore((s) => s.showToast)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -75,12 +78,16 @@ export function ImageUpload() {
         try {
           const webpDataUrl = await convertToWebP(originalDataUrl)
           const baseName = file.name.replace(/\.[^.]+$/, '')
+          const imageId = generateId()
+          const filename = `${baseName}.webp`
           addUploadedImage({
-            id: generateId(),
+            id: imageId,
             dataUrl: webpDataUrl,
-            filename: `${baseName}.webp`,
+            filename,
             size: webpDataUrl.length
           })
+          const codemap = await analyzeImage(webpDataUrl, filename, file.size)
+          setImageCodemap(imageId, codemap)
         } catch {
           showToast(`Failed to convert ${file.name} to WebP`)
         }
@@ -90,7 +97,7 @@ export function ImageUpload() {
       }
       reader.readAsDataURL(file)
     })
-  }, [addUploadedImage, showToast])
+  }, [addUploadedImage, setImageCodemap, showToast])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -247,6 +254,15 @@ export function ImageUpload() {
                     {truncateSelector(img.linkedElementSelector, 24)}
                   </span>
                 )}
+                <input
+                  type="text"
+                  className="thumbnail-description"
+                  value={img.description ?? ''}
+                  onChange={(e) => setImageDescription(img.id, e.target.value)}
+                  placeholder="Describe..."
+                  maxLength={200}
+                  aria-label={`Description for ${img.filename}`}
+                />
               </div>
             )
           })}

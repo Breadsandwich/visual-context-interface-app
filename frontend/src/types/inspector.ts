@@ -13,12 +13,29 @@ export interface ElementContext {
   boundingRect: DOMRect
 }
 
+export interface ImageCodemap {
+  filename: string
+  dimensions: string
+  aspectRatio: string
+  fileSize: string
+  dominantColors: string[]
+  brightness: 'dark' | 'medium' | 'light'
+  hasTransparency: boolean
+}
+
+export interface ExternalImagePayload extends ImageCodemap {
+  description: string
+  linkedElementSelector?: string
+}
+
 export interface UploadedImage {
   id: string
   dataUrl: string
   filename: string
   size: number
   linkedElementSelector?: string
+  codemap?: ImageCodemap
+  description?: string
 }
 
 export interface InspectorEvent {
@@ -79,7 +96,7 @@ export interface OutputPayload {
     classes: string[]
     elementPrompt: string
   }>
-  externalImages: string[]
+  externalImages: ExternalImagePayload[]
   visual: string | null
   visualPrompt: string
   prompt: string

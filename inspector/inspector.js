@@ -18,6 +18,7 @@
   const MAX_SCREENSHOT_WIDTH = 1920;
   const MAX_SCREENSHOT_HEIGHT = 1080;
   const SCREENSHOT_QUALITY = 0.8;
+  const MAX_SELECTED_ELEMENTS = 10;
 
   // Matches modern CSS color functions unsupported by html2canvas v1.x
   // Covers: oklab(), oklch(), lab(), lch(), color-mix(), color() with up to 2 levels of nested parens
@@ -27,7 +28,7 @@
   const state = {
     mode: 'interaction', // 'interaction' | 'inspection' | 'screenshot'
     hoveredElement: null,
-    selectedElement: null,
+    selectedElements: [], // Array of { element, context } objects
     initialized: false,
     parentOrigin: window.__INSPECTOR_PARENT_ORIGIN__ || window.location.origin,
     routeCheckInterval: null
@@ -39,8 +40,8 @@
   overlay.style.cssText = `
     position: fixed;
     pointer-events: none;
-    border: 2px solid #646cff;
-    background-color: rgba(100, 108, 255, 0.1);
+    border: 2px solid #2D8AE1;
+    background-color: rgba(45, 138, 225, 0.1);
     z-index: 999999;
     display: none;
     transition: all 0.05s ease-out;
@@ -51,7 +52,7 @@
   tooltip.id = '__inspector_tooltip__';
   tooltip.style.cssText = `
     position: fixed;
-    background-color: #1a1a2e;
+    background-color: #0C2739;
     color: #ffffff;
     padding: 6px 10px;
     border-radius: 4px;
@@ -65,18 +66,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-  `;
-
-  // Create selection indicator
-  const selectionIndicator = document.createElement('div');
-  selectionIndicator.id = '__inspector_selection__';
-  selectionIndicator.style.cssText = `
-    position: fixed;
-    pointer-events: none;
-    border: 3px solid #22c55e;
-    background-color: rgba(34, 197, 94, 0.1);
-    z-index: 999998;
-    display: none;
   `;
 
   /**
@@ -196,6 +185,38 @@
   function hideOverlay() {
     overlay.style.display = 'none';
     tooltip.style.display = 'none';
+  }
+
+  /**
+   * Remove all selection indicator elements from the DOM
+   */
+  function removeAllSelectionIndicators() {
+    document.querySelectorAll('[id^="__inspector_selection_"]').forEach(function(el) {
+      el.remove();
+    });
+  }
+
+  /**
+   * Create and position selection indicators for all selected elements
+   */
+  function updateSelectionIndicators() {
+    removeAllSelectionIndicators();
+
+    state.selectedElements.forEach(function(entry, index) {
+      if (!entry.element || !entry.element.isConnected) return;
+
+      var indicator = document.createElement('div');
+      indicator.id = '__inspector_selection_' + index;
+      indicator.style.cssText = `
+        position: fixed;
+        pointer-events: none;
+        border: 3px solid #00F26C;
+        background-color: rgba(0, 242, 108, 0.08);
+        z-index: 999998;
+      `;
+      document.body.appendChild(indicator);
+      positionOverlay(entry.element, indicator);
+    });
   }
 
   /**
@@ -486,7 +507,7 @@
   }
 
   /**
-   * Handle click in inspection mode
+   * Handle click in inspection mode — toggle element selection
    */
   function handleClick(event) {
     if (state.mode !== 'inspection') return;
@@ -497,13 +518,24 @@
     event.preventDefault();
     event.stopPropagation();
 
-    state.selectedElement = event.target;
-    const context = getElementContext(event.target);
+    var context = getElementContext(event.target);
+    var existingIndex = state.selectedElements.findIndex(
+      function(entry) { return entry.context.selector === context.selector; }
+    );
 
-    // Show selection indicator
-    positionOverlay(event.target, selectionIndicator);
+    if (existingIndex !== -1) {
+      // Toggle off — remove from selection (immutable)
+      state.selectedElements = state.selectedElements.filter(
+        function(entry) { return entry.context.selector !== context.selector; }
+      );
+    } else if (state.selectedElements.length < MAX_SELECTED_ELEMENTS) {
+      // Toggle on — add to selection (immutable)
+      state.selectedElements = state.selectedElements.concat([{ element: event.target, context: context }]);
+    }
 
-    // Send selection to parent
+    updateSelectionIndicators();
+
+    // Send the toggled element context to the parent
     sendToParent('ELEMENT_SELECTED', { element: context });
   }
 
@@ -535,14 +567,15 @@
         break;
 
       case 'CAPTURE_ELEMENT':
-        if (state.selectedElement) {
-          captureScreenshot({ selector: generateSelector(state.selectedElement) });
+        if (state.selectedElements.length > 0) {
+          var lastEntry = state.selectedElements[state.selectedElements.length - 1];
+          captureScreenshot({ selector: lastEntry.context.selector });
         }
         break;
 
       case 'CLEAR_SELECTION':
-        state.selectedElement = null;
-        selectionIndicator.style.display = 'none';
+        state.selectedElements = [];
+        removeAllSelectionIndicators();
         break;
 
       case 'GET_ROUTE':
@@ -571,7 +604,6 @@
     // Add elements to DOM
     document.body.appendChild(overlay);
     document.body.appendChild(tooltip);
-    document.body.appendChild(selectionIndicator);
 
     // Add event listeners
     document.addEventListener('mousemove', handleMouseMove, true);

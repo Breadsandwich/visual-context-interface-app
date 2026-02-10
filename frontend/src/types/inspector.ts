@@ -13,6 +13,45 @@ export interface ElementContext {
   boundingRect: DOMRect
 }
 
+export type ContentType = 'screenshot' | 'photo' | 'illustration' | 'icon' | 'chart' | 'text-heavy' | 'mixed'
+export type Complexity = 'minimal' | 'moderate' | 'complex'
+export type VisualWeight = 'top' | 'center' | 'bottom' | 'left' | 'right' | 'balanced'
+export type TextProminence = 'none' | 'minimal' | 'moderate' | 'dominant'
+export type FontScale = 'small' | 'medium' | 'large' | 'mixed'
+export type FontWeight = 'light' | 'regular' | 'bold' | 'mixed'
+
+export interface ImageCodemap {
+  filename: string
+  dimensions: string
+  aspectRatio: string
+  fileSize: string
+  dominantColors: string[]
+  brightness: 'dark' | 'medium' | 'light'
+  hasTransparency: boolean
+  summary: string
+  contentType?: ContentType
+  complexity?: Complexity
+  visualWeight?: VisualWeight
+  hasText?: boolean
+  textProminence?: TextProminence
+  estimatedFontScale?: FontScale
+  fontWeight?: FontWeight
+}
+
+export interface ExternalImagePayload extends ImageCodemap {
+  description: string
+  linkedElementSelector?: string
+}
+
+export interface UploadedImage {
+  id: string
+  dataUrl: string
+  filename: string
+  size: number
+  linkedElementSelector?: string
+  codemap?: ImageCodemap
+}
+
 export interface InspectorEvent {
   type: 'INSPECTOR_EVENT'
   action: 'ELEMENT_SELECTED' | 'SCREENSHOT_CAPTURED' | 'ROUTE_CHANGED' | 'READY' | 'SCREENSHOT_ERROR'
@@ -36,7 +75,6 @@ export interface ScreenshotPayload {
 
 export interface RouteChangedPayload {
   route: string
-  title: string
 }
 
 export interface ReadyPayload {
@@ -64,14 +102,17 @@ export interface InspectorCommand {
 
 export interface OutputPayload {
   route: string
-  context: {
+  contexts: Array<{
     html: string
     selector: string
     tagName: string
     id: string
     classes: string[]
-  } | null
+    elementPrompt: string
+  }>
+  externalImages: ExternalImagePayload[]
   visual: string | null
+  visualPrompt: string
   prompt: string
   timestamp: string
 }

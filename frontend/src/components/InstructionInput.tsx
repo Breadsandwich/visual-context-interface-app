@@ -11,7 +11,7 @@ export function InstructionInput() {
         id="user-prompt"
         value={userPrompt}
         onChange={(e) => setUserPrompt(e.target.value)}
-        placeholder="Describe what you want Claude to do with the selected element..."
+        placeholder="Describe what you want Claude to do with the selected elements..."
         rows={4}
       />
     </div>

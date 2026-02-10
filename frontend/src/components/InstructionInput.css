@@ -7,15 +7,22 @@
 .instruction-input label {
   font-size: 0.875rem;
   font-weight: 500;
-  color: #999;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.instruction-input .sub-label {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 0.25rem;
 }
 
 .instruction-input textarea {
   width: 100%;
   padding: 0.75rem;
-  background: #2a2a2a;
-  border: 1px solid #333;
-  border-radius: 0.375rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
   color: #fff;
   font-family: inherit;
   font-size: 0.875rem;
@@ -25,9 +32,9 @@
 
 .instruction-input textarea:focus {
   outline: none;
-  border-color: #646cff;
+  border-color: #2D8AE1;
 }
 
 .instruction-input textarea::placeholder {
-  color: #666;
+  color: rgba(255, 255, 255, 0.3);
 }

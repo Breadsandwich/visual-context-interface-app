@@ -35,7 +35,7 @@ const proxyOrigin = parseProxyOrigin()
 export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | null>) {
   const {
     setMode,
-    setSelectedElement,
+    toggleSelectedElement,
     setScreenshotData,
     setCurrentRoute,
     setInspectorReady,
@@ -64,7 +64,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
 
         case 'ELEMENT_SELECTED':
           if (data.payload && 'element' in data.payload && isElementContext(data.payload.element)) {
-            setSelectedElement(data.payload.element)
+            toggleSelectedElement(data.payload.element)
           }
           break
 
@@ -87,10 +87,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
 
         case 'ROUTE_CHANGED':
           if (data.payload && 'route' in data.payload && typeof data.payload.route === 'string') {
-            const title = 'title' in data.payload && typeof data.payload.title === 'string'
-              ? data.payload.title
-              : undefined
-            setCurrentRoute(data.payload.route, title)
+            setCurrentRoute(data.payload.route)
           }
           break
       }
@@ -98,7 +95,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [setMode, setSelectedElement, setScreenshotData, setCurrentRoute, setInspectorReady])
+  }, [setMode, toggleSelectedElement, setScreenshotData, setCurrentRoute, setInspectorReady])
 
   // Send command to inspector with origin restriction
   const sendCommand = useCallback((command: InspectorCommand) => {

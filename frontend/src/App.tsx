@@ -1,5 +1,6 @@
 import { Viewport } from './components/Viewport'
 import { InspectorOverlay } from './components/InspectorOverlay'
+import { Toast } from './components/Toast'
 import './App.css'
 
 function App() {
@@ -9,6 +10,7 @@ function App() {
         <Viewport />
         <InspectorOverlay />
       </main>
+      <Toast />
     </div>
   )
 }

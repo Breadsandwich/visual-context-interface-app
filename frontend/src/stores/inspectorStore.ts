@@ -35,7 +35,6 @@ interface InspectorState {
   setCurrentRoute: (route: string) => void
   setUserPrompt: (prompt: string) => void
   setInspectorReady: (ready: boolean) => void
-  setImageDescription: (imageId: string, description: string) => void
   setImageCodemap: (imageId: string, codemap: ImageCodemap) => void
   linkImageToElement: (imageId: string, selector: string | null) => void
   clearSelection: () => void
@@ -188,12 +187,6 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
 
   setInspectorReady: (ready) => set({ isInspectorReady: ready }),
 
-  setImageDescription: (imageId, description) => set((state) => ({
-    uploadedImages: state.uploadedImages.map((img) =>
-      img.id === imageId ? { ...img, description } : img
-    )
-  })),
-
   setImageCodemap: (imageId, codemap) => set((state) => ({
     uploadedImages: state.uploadedImages.map((img) =>
       img.id === imageId ? { ...img, codemap } : img
@@ -258,7 +251,15 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         dominantColors: img.codemap?.dominantColors ?? [],
         brightness: img.codemap?.brightness ?? 'medium',
         hasTransparency: img.codemap?.hasTransparency ?? false,
-        description: img.description ?? '',
+        contentType: img.codemap?.contentType,
+        complexity: img.codemap?.complexity,
+        visualWeight: img.codemap?.visualWeight,
+        hasText: img.codemap?.hasText,
+        textProminence: img.codemap?.textProminence,
+        estimatedFontScale: img.codemap?.estimatedFontScale,
+        fontWeight: img.codemap?.fontWeight,
+        summary: img.codemap?.summary ?? '',
+        description: img.codemap?.summary ?? '',
         linkedElementSelector: img.linkedElementSelector,
       })),
       visual: state.screenshotData,

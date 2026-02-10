@@ -13,6 +13,13 @@ export interface ElementContext {
   boundingRect: DOMRect
 }
 
+export type ContentType = 'screenshot' | 'photo' | 'illustration' | 'icon' | 'chart' | 'text-heavy' | 'mixed'
+export type Complexity = 'minimal' | 'moderate' | 'complex'
+export type VisualWeight = 'top' | 'center' | 'bottom' | 'left' | 'right' | 'balanced'
+export type TextProminence = 'none' | 'minimal' | 'moderate' | 'dominant'
+export type FontScale = 'small' | 'medium' | 'large' | 'mixed'
+export type FontWeight = 'light' | 'regular' | 'bold' | 'mixed'
+
 export interface ImageCodemap {
   filename: string
   dimensions: string
@@ -21,6 +28,14 @@ export interface ImageCodemap {
   dominantColors: string[]
   brightness: 'dark' | 'medium' | 'light'
   hasTransparency: boolean
+  summary: string
+  contentType?: ContentType
+  complexity?: Complexity
+  visualWeight?: VisualWeight
+  hasText?: boolean
+  textProminence?: TextProminence
+  estimatedFontScale?: FontScale
+  fontWeight?: FontWeight
 }
 
 export interface ExternalImagePayload extends ImageCodemap {
@@ -35,7 +50,6 @@ export interface UploadedImage {
   size: number
   linkedElementSelector?: string
   codemap?: ImageCodemap
-  description?: string
 }
 
 export interface InspectorEvent {

@@ -1,15 +1,13 @@
-import './Home.css'
+import "./Home.css";
 
 function Home() {
   return (
     <div className="home">
       <section className="hero">
-        {/* INTENTIONAL ISSUE: Heading color is wrong (should be dark, is red) */}
         <h1 className="hero-title">Welcome to DummyApp</h1>
         <p className="hero-subtitle">
           A sample application for testing the Visual Context Interface
         </p>
-        {/* INTENTIONAL ISSUE: Button is misaligned (margin-left instead of centered) */}
         <button className="cta-button">Get Started</button>
       </section>
 
@@ -49,7 +47,7 @@ function Home() {
         </div>
       </section>
     </div>
-  )
+  );
 }
 
-export default Home
+export default Home;

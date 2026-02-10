@@ -1,25 +1,24 @@
-import { useState } from 'react'
-import './Contact.css'
+import { useState } from "react";
+import "./Contact.css";
 
 function Contact() {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    message: ''
-  })
+    name: "",
+    email: "",
+    message: "",
+  });
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
-    })
-  }
+      [e.target.name]: e.target.value,
+    });
+  };
 
   const handleSubmit = (e) => {
-    e.preventDefault()
-    // INTENTIONAL ISSUE: No form validation before submit
-    alert('Form submitted! (No actual validation)')
-  }
+    e.preventDefault();
+    alert("Form submitted! (No actual validation)");
+  };
 
   return (
     <div className="contact">
@@ -28,7 +27,10 @@ function Contact() {
       <div className="contact-content">
         <div className="contact-info">
           <h2>Get in Touch</h2>
-          <p>We would love to hear from you. Send us a message and we will respond as soon as possible.</p>
+          <p>
+            We would love to hear from you. Send us a message and we will
+            respond as soon as possible.
+          </p>
 
           <div className="info-items">
             <div className="info-item">
@@ -61,7 +63,6 @@ function Contact() {
 
           <div className="form-group">
             <label htmlFor="email">Email</label>
-            {/* INTENTIONAL ISSUE: No email validation */}
             <input
               type="text"
               id="email"
@@ -90,7 +91,7 @@ function Contact() {
         </form>
       </div>
     </div>
-  )
+  );
 }
 
-export default Contact
+export default Contact;

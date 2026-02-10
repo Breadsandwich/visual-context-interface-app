@@ -41,7 +41,6 @@ export function ImageUpload() {
   const addUploadedImage = useInspectorStore((s) => s.addUploadedImage)
   const removeUploadedImage = useInspectorStore((s) => s.removeUploadedImage)
   const linkImageToElement = useInspectorStore((s) => s.linkImageToElement)
-  const setImageDescription = useInspectorStore((s) => s.setImageDescription)
   const setImageCodemap = useInspectorStore((s) => s.setImageCodemap)
   const showToast = useInspectorStore((s) => s.showToast)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -254,15 +253,6 @@ export function ImageUpload() {
                     {truncateSelector(img.linkedElementSelector, 24)}
                   </span>
                 )}
-                <input
-                  type="text"
-                  className="thumbnail-description"
-                  value={img.description ?? ''}
-                  onChange={(e) => setImageDescription(img.id, e.target.value)}
-                  placeholder="Describe..."
-                  maxLength={200}
-                  aria-label={`Description for ${img.filename}`}
-                />
               </div>
             )
           })}

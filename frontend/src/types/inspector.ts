@@ -38,9 +38,22 @@ export interface ImageCodemap {
   fontWeight?: FontWeight
 }
 
+export interface VisionAnalysis {
+  description: string
+  contentType: ContentType
+  uiElements: string[]
+  textContent: string
+  colorPalette: string[]
+  layout: string
+  accessibility: string
+}
+
+export type AnalysisStatus = 'idle' | 'analyzing' | 'complete' | 'error'
+
 export interface ExternalImagePayload extends ImageCodemap {
   description: string
   linkedElementSelector?: string
+  visionAnalysis?: VisionAnalysis
 }
 
 export interface UploadedImage {
@@ -50,6 +63,9 @@ export interface UploadedImage {
   size: number
   linkedElementSelector?: string
   codemap?: ImageCodemap
+  visionAnalysis?: VisionAnalysis
+  analysisStatus?: AnalysisStatus
+  analysisError?: string
 }
 
 export interface InspectorEvent {
@@ -113,6 +129,7 @@ export interface OutputPayload {
   externalImages: ExternalImagePayload[]
   visual: string | null
   visualPrompt: string
+  visualAnalysis: VisionAnalysis | null
   prompt: string
   timestamp: string
 }

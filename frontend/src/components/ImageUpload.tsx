@@ -1,6 +1,7 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
 import { analyzeImage } from '../utils/imageAnalyzer'
+import { useVisionAnalysis } from '../hooks/useVisionAnalysis'
 import './ImageUpload.css'
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
@@ -43,6 +44,7 @@ export function ImageUpload() {
   const linkImageToElement = useInspectorStore((s) => s.linkImageToElement)
   const setImageCodemap = useInspectorStore((s) => s.setImageCodemap)
   const showToast = useInspectorStore((s) => s.showToast)
+  const { analyzeUploadedImage } = useVisionAnalysis()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const [isDragging, setIsDragging] = useState(false)
@@ -87,6 +89,7 @@ export function ImageUpload() {
           })
           const codemap = await analyzeImage(webpDataUrl, filename, file.size)
           setImageCodemap(imageId, codemap)
+          analyzeUploadedImage(imageId, webpDataUrl, filename)
         } catch {
           showToast(`Failed to convert ${file.name} to WebP`)
         }
@@ -96,7 +99,7 @@ export function ImageUpload() {
       }
       reader.readAsDataURL(file)
     })
-  }, [addUploadedImage, setImageCodemap, showToast])
+  }, [addUploadedImage, setImageCodemap, showToast, analyzeUploadedImage])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -247,6 +250,21 @@ export function ImageUpload() {
                   )}
                 </div>
 
+                {img.analysisStatus === 'analyzing' && (
+                  <span className="thumbnail-analysis-badge analyzing" aria-label="Analyzing">
+                    <span className="mini-spinner" />
+                  </span>
+                )}
+                {img.analysisStatus === 'complete' && (
+                  <span className="thumbnail-analysis-badge complete" aria-label="Analysis complete">
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                )}
+                {img.analysisStatus === 'error' && (
+                  <span className="thumbnail-analysis-badge error" aria-label="Analysis failed">!</span>
+                )}
                 <span className="thumbnail-name">{img.filename}</span>
                 {img.linkedElementSelector && (
                   <span className="thumbnail-linked-to">

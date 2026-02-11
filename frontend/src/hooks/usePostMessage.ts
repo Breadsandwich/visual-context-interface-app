@@ -39,6 +39,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
     setScreenshotData,
     setCurrentRoute,
     setInspectorReady,
+    showToast,
     mode,
     clearSelectionTrigger
   } = useInspectorStore()
@@ -80,7 +81,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
 
         case 'SCREENSHOT_ERROR':
           if (data.payload && 'error' in data.payload) {
-            console.error('[Inspector] Screenshot capture failed:', data.payload.error)
+            showToast(`Screenshot capture failed: ${data.payload.error}`)
           }
           setMode('interaction')
           break
@@ -95,7 +96,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [setMode, toggleSelectedElement, setScreenshotData, setCurrentRoute, setInspectorReady])
+  }, [setMode, toggleSelectedElement, setScreenshotData, setCurrentRoute, setInspectorReady, showToast])
 
   // Send command to inspector with origin restriction
   const sendCommand = useCallback((command: InspectorCommand) => {

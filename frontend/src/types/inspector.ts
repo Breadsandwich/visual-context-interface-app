@@ -13,33 +13,10 @@ export interface ElementContext {
   boundingRect: DOMRect
 }
 
-export type ContentType = 'screenshot' | 'photo' | 'illustration' | 'icon' | 'chart' | 'text-heavy' | 'mixed'
-export type Complexity = 'minimal' | 'moderate' | 'complex'
-export type VisualWeight = 'top' | 'center' | 'bottom' | 'left' | 'right' | 'balanced'
-export type TextProminence = 'none' | 'minimal' | 'moderate' | 'dominant'
-export type FontScale = 'small' | 'medium' | 'large' | 'mixed'
-export type FontWeight = 'light' | 'regular' | 'bold' | 'mixed'
-
-export interface ImageCodemap {
+export interface ExternalImagePayload {
   filename: string
-  dimensions: string
-  aspectRatio: string
-  fileSize: string
-  dominantColors: string[]
-  brightness: 'dark' | 'medium' | 'light'
-  hasTransparency: boolean
-  summary: string
-  contentType?: ContentType
-  complexity?: Complexity
-  visualWeight?: VisualWeight
-  hasText?: boolean
-  textProminence?: TextProminence
-  estimatedFontScale?: FontScale
-  fontWeight?: FontWeight
-}
-
-export interface ExternalImagePayload extends ImageCodemap {
-  description: string
+  filePath: string
+  claudeRef: string
   linkedElementSelector?: string
 }
 
@@ -49,7 +26,7 @@ export interface UploadedImage {
   filename: string
   size: number
   linkedElementSelector?: string
-  codemap?: ImageCodemap
+  filePath?: string
 }
 
 export interface InspectorEvent {
@@ -111,8 +88,9 @@ export interface OutputPayload {
     elementPrompt: string
   }>
   externalImages: ExternalImagePayload[]
-  visual: string | null
+  screenshotFilePath: string | null
   visualPrompt: string
   prompt: string
+  claudeCodePrompt: string
   timestamp: string
 }

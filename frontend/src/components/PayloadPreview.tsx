@@ -1,5 +1,5 @@
 import { useInspectorStore } from '../stores/inspectorStore'
-import { formatPayloadForClipboard, copyToClipboard } from '../utils/payloadBuilder'
+import { formatClaudeCodePrompt, copyToClipboard } from '../utils/payloadBuilder'
 import './PayloadPreview.css'
 
 export function PayloadPreview() {
@@ -9,10 +9,10 @@ export function PayloadPreview() {
 
   const handleSendToAdom = async () => {
     const payload = generatePayload()
-    const jsonPayload = formatPayloadForClipboard(payload)
-    const success = await copyToClipboard(jsonPayload)
+    const prompt = formatClaudeCodePrompt(payload)
+    const success = await copyToClipboard(prompt)
     if (success) {
-      showToast('Clipboard exported to ADOM')
+      showToast('Claude Code prompt copied to clipboard')
     } else {
       showToast('Failed to copy to clipboard')
     }

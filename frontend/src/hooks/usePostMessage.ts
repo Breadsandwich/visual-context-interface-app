@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
+import { saveImageToDisk } from '../utils/imageSaver'
 import type { InspectorEvent, InspectorCommand, InspectorMode, ElementContext } from '../types/inspector'
 
 // Type guard for InspectorEvent
@@ -37,8 +38,10 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
     setMode,
     toggleSelectedElement,
     setScreenshotData,
+    setScreenshotFilePath,
     setCurrentRoute,
     setInspectorReady,
+    showToast,
     mode,
     clearSelectionTrigger
   } = useInspectorStore()
@@ -70,18 +73,19 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
 
         case 'SCREENSHOT_CAPTURED':
           if (data.payload && 'imageData' in data.payload && typeof data.payload.imageData === 'string') {
-            // Validate it's a valid data URL
             if (data.payload.imageData.startsWith('data:image/')) {
               setScreenshotData(data.payload.imageData)
+              setScreenshotFilePath(null)
               setMode('interaction')
+              saveImageToDisk(data.payload.imageData, 'screenshot')
+                .then(({ filePath }) => setScreenshotFilePath(filePath))
+                .catch(() => showToast('Failed to save screenshot to disk'))
             }
           }
           break
 
         case 'SCREENSHOT_ERROR':
-          if (data.payload && 'error' in data.payload) {
-            console.error('[Inspector] Screenshot capture failed:', data.payload.error)
-          }
+          showToast('Screenshot capture failed')
           setMode('interaction')
           break
 
@@ -95,7 +99,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [setMode, toggleSelectedElement, setScreenshotData, setCurrentRoute, setInspectorReady])
+  }, [setMode, toggleSelectedElement, setScreenshotData, setScreenshotFilePath, setCurrentRoute, setInspectorReady, showToast])
 
   // Send command to inspector with origin restriction
   const sendCommand = useCallback((command: InspectorCommand) => {

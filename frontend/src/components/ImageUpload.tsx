@@ -1,6 +1,6 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
-import { analyzeImage } from '../utils/imageAnalyzer'
+import { saveImageToDisk } from '../utils/imageSaver'
 import './ImageUpload.css'
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
@@ -41,7 +41,7 @@ export function ImageUpload() {
   const addUploadedImage = useInspectorStore((s) => s.addUploadedImage)
   const removeUploadedImage = useInspectorStore((s) => s.removeUploadedImage)
   const linkImageToElement = useInspectorStore((s) => s.linkImageToElement)
-  const setImageCodemap = useInspectorStore((s) => s.setImageCodemap)
+  const setImageFilePath = useInspectorStore((s) => s.setImageFilePath)
   const showToast = useInspectorStore((s) => s.showToast)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -85,8 +85,9 @@ export function ImageUpload() {
             filename,
             size: webpDataUrl.length
           })
-          const codemap = await analyzeImage(webpDataUrl, filename, file.size)
-          setImageCodemap(imageId, codemap)
+          saveImageToDisk(webpDataUrl, 'upload')
+            .then(({ filePath }) => setImageFilePath(imageId, filePath))
+            .catch(() => showToast('Failed to save image to disk'))
         } catch {
           showToast(`Failed to convert ${file.name} to WebP`)
         }
@@ -96,7 +97,7 @@ export function ImageUpload() {
       }
       reader.readAsDataURL(file)
     })
-  }, [addUploadedImage, setImageCodemap, showToast])
+  }, [addUploadedImage, setImageFilePath, showToast])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()

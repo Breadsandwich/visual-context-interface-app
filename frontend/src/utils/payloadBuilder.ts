@@ -1,7 +1,7 @@
 import type { OutputPayload } from '../types/inspector'
 
-export function formatPayloadForClipboard(payload: OutputPayload): string {
-  return JSON.stringify(payload, null, 2)
+export function formatClaudeCodePrompt(payload: OutputPayload): string {
+  return payload.claudeCodePrompt
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {

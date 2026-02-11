@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { InspectorMode, ElementContext, UploadedImage, ImageCodemap, OutputPayload } from '../types/inspector'
+import type { InspectorMode, ElementContext, UploadedImage, OutputPayload } from '../types/inspector'
+import { clearTempImages, deleteImageFromDisk } from '../utils/imageSaver'
 
 const MAX_SELECTED_ELEMENTS = 10
 const MAX_UPLOADED_IMAGES = 10
@@ -13,6 +14,7 @@ interface InspectorState {
   uploadedImages: UploadedImage[]
   toastMessage: string | null
   screenshotData: string | null
+  screenshotFilePath: string | null
   screenshotPrompt: string
   currentRoute: string
   userPrompt: string
@@ -31,11 +33,12 @@ interface InspectorState {
   showToast: (message: string) => void
   dismissToast: () => void
   setScreenshotData: (data: string | null) => void
+  setScreenshotFilePath: (filePath: string | null) => void
   setScreenshotPrompt: (prompt: string) => void
   setCurrentRoute: (route: string) => void
   setUserPrompt: (prompt: string) => void
   setInspectorReady: (ready: boolean) => void
-  setImageCodemap: (imageId: string, codemap: ImageCodemap) => void
+  setImageFilePath: (imageId: string, filePath: string) => void
   linkImageToElement: (imageId: string, selector: string | null) => void
   clearSelection: () => void
   clearScreenshot: () => void
@@ -53,6 +56,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   uploadedImages: [],
   toastMessage: null,
   screenshotData: null,
+  screenshotFilePath: null,
   screenshotPrompt: '',
   currentRoute: '/',
   userPrompt: '',
@@ -148,9 +152,18 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     return { uploadedImages: [...state.uploadedImages, image] }
   }),
 
-  removeUploadedImage: (id) => set((state) => ({
-    uploadedImages: state.uploadedImages.filter((img) => img.id !== id)
-  })),
+  removeUploadedImage: (id) => set((state) => {
+    const target = state.uploadedImages.find((img) => img.id === id)
+    if (target?.filePath) {
+      const filename = target.filePath.split('/').pop()
+      if (filename) {
+        deleteImageFromDisk(filename).catch(() => {})
+      }
+    }
+    return {
+      uploadedImages: state.uploadedImages.filter((img) => img.id !== id)
+    }
+  }),
 
   clearUploadedImages: () => set({ uploadedImages: [] }),
 
@@ -187,9 +200,11 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
 
   setInspectorReady: (ready) => set({ isInspectorReady: ready }),
 
-  setImageCodemap: (imageId, codemap) => set((state) => ({
+  setScreenshotFilePath: (filePath) => set({ screenshotFilePath: filePath }),
+
+  setImageFilePath: (imageId, filePath) => set((state) => ({
     uploadedImages: state.uploadedImages.map((img) =>
-      img.id === imageId ? { ...img, codemap } : img
+      img.id === imageId ? { ...img, filePath } : img
     )
   })),
 
@@ -201,30 +216,52 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     )
   })),
 
-  clearSelection: () => set((state) => ({
-    selectedElements: [],
-    elementPrompts: {},
-    screenshotData: null,
-    screenshotPrompt: '',
-    uploadedImages: state.uploadedImages.map((img) =>
-      img.linkedElementSelector ? { ...img, linkedElementSelector: undefined } : img
-    )
-  })),
+  clearSelection: () => set((state) => {
+    if (state.screenshotFilePath) {
+      const filename = state.screenshotFilePath.split('/').pop()
+      if (filename) {
+        deleteImageFromDisk(filename).catch(() => {})
+      }
+    }
+    return {
+      selectedElements: [],
+      elementPrompts: {},
+      screenshotData: null,
+      screenshotFilePath: null,
+      screenshotPrompt: '',
+      uploadedImages: state.uploadedImages.map((img) =>
+        img.linkedElementSelector ? { ...img, linkedElementSelector: undefined } : img
+      )
+    }
+  }),
 
-  clearScreenshot: () => set({ screenshotData: null, screenshotPrompt: '' }),
+  clearScreenshot: () => {
+    const { screenshotFilePath } = get()
+    if (screenshotFilePath) {
+      const filename = screenshotFilePath.split('/').pop()
+      if (filename) {
+        deleteImageFromDisk(filename).catch(() => {})
+      }
+    }
+    return set({ screenshotData: null, screenshotFilePath: null, screenshotPrompt: '' })
+  },
 
-  resetAll: () => set((state) => ({
-    mode: 'interaction',
-    selectedElements: [],
-    elementPrompts: {},
-    uploadedImages: [],
-    toastMessage: null,
-    screenshotData: null,
-    screenshotPrompt: '',
-    userPrompt: '',
-    isSidebarOpen: false,
-    clearSelectionTrigger: state.clearSelectionTrigger + 1
-  })),
+  resetAll: () => {
+    clearTempImages().catch(() => {})
+    return set((state) => ({
+      mode: 'interaction',
+      selectedElements: [],
+      elementPrompts: {},
+      uploadedImages: [],
+      toastMessage: null,
+      screenshotData: null,
+      screenshotFilePath: null,
+      screenshotPrompt: '',
+      userPrompt: '',
+      isSidebarOpen: false,
+      clearSelectionTrigger: state.clearSelectionTrigger + 1
+    }))
+  },
 
   openSidebar: () => set({ isSidebarOpen: true }),
   closeSidebar: () => set({ isSidebarOpen: false }),
@@ -233,38 +270,85 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   generatePayload: () => {
     const state = get()
 
+    const externalImages = state.uploadedImages
+      .filter((img) => img.filePath)
+      .map((img) => ({
+        filename: img.filename,
+        filePath: img.filePath!,
+        claudeRef: `@${img.filePath}`,
+        linkedElementSelector: img.linkedElementSelector,
+      }))
+
+    const contexts = state.selectedElements.map((el) => ({
+      html: el.outerHTML,
+      selector: el.selector,
+      tagName: el.tagName,
+      id: el.id,
+      classes: el.classes,
+      elementPrompt: state.elementPrompts[el.selector] ?? ''
+    }))
+
+    // Build Claude Code prompt with @file references
+    const lines: string[] = []
+
+    // File references
+    if (state.screenshotFilePath) {
+      lines.push(`@${state.screenshotFilePath}`)
+    }
+    for (const img of externalImages) {
+      lines.push(img.claudeRef)
+    }
+    if (lines.length > 0) {
+      lines.push('')
+    }
+
+    // Route context
+    if (state.currentRoute) {
+      lines.push(`Route: ${state.currentRoute}`)
+      lines.push('')
+    }
+
+    // Selected elements
+    if (contexts.length > 0) {
+      lines.push('Selected elements:')
+      for (const ctx of contexts) {
+        const label = [ctx.tagName, ctx.id ? `#${ctx.id}` : '', ctx.classes.length > 0 ? `.${ctx.classes.join('.')}` : '']
+          .filter(Boolean)
+          .join('')
+        const promptSuffix = ctx.elementPrompt ? `: ${ctx.elementPrompt}` : ''
+        lines.push(`- ${label} (${ctx.selector})${promptSuffix}`)
+        lines.push(`  ${ctx.html.slice(0, 200)}${ctx.html.length > 200 ? '...' : ''}`)
+
+        // Show linked images
+        const linkedImgs = externalImages.filter((img) => img.linkedElementSelector === ctx.selector)
+        for (const linked of linkedImgs) {
+          lines.push(`  Linked image: ${linked.claudeRef}`)
+        }
+      }
+      lines.push('')
+    }
+
+    // Screenshot context
+    if (state.screenshotFilePath && state.screenshotPrompt) {
+      lines.push(`Screenshot context: ${state.screenshotPrompt}`)
+      lines.push('')
+    }
+
+    // User prompt
+    if (state.userPrompt) {
+      lines.push(state.userPrompt)
+    }
+
+    const claudeCodePrompt = lines.join('\n').trim()
+
     const payload: OutputPayload = {
       route: state.currentRoute,
-      contexts: state.selectedElements.map((el) => ({
-        html: el.outerHTML,
-        selector: el.selector,
-        tagName: el.tagName,
-        id: el.id,
-        classes: el.classes,
-        elementPrompt: state.elementPrompts[el.selector] ?? ''
-      })),
-      externalImages: state.uploadedImages.map((img) => ({
-        filename: img.codemap?.filename ?? img.filename,
-        dimensions: img.codemap?.dimensions ?? 'unknown',
-        aspectRatio: img.codemap?.aspectRatio ?? 'unknown',
-        fileSize: img.codemap?.fileSize ?? `${img.size} B`,
-        dominantColors: img.codemap?.dominantColors ?? [],
-        brightness: img.codemap?.brightness ?? 'medium',
-        hasTransparency: img.codemap?.hasTransparency ?? false,
-        contentType: img.codemap?.contentType,
-        complexity: img.codemap?.complexity,
-        visualWeight: img.codemap?.visualWeight,
-        hasText: img.codemap?.hasText,
-        textProminence: img.codemap?.textProminence,
-        estimatedFontScale: img.codemap?.estimatedFontScale,
-        fontWeight: img.codemap?.fontWeight,
-        summary: img.codemap?.summary ?? '',
-        description: img.codemap?.summary ?? '',
-        linkedElementSelector: img.linkedElementSelector,
-      })),
-      visual: state.screenshotData,
+      contexts,
+      externalImages,
+      screenshotFilePath: state.screenshotFilePath,
       visualPrompt: state.screenshotPrompt,
       prompt: state.userPrompt,
+      claudeCodePrompt,
       timestamp: new Date().toISOString()
     }
     return payload

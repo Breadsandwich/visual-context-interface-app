@@ -1,4 +1,4 @@
-import type { ImageCodemap, ContentType, Complexity, VisualWeight, TextProminence, FontScale, FontWeight } from '../types/inspector'
+import type { ImageCodemap } from '../types/inspector'
 
 interface RgbaSample {
   r: number
@@ -12,20 +12,6 @@ interface ColorCluster {
   g: number
   b: number
   count: number
-}
-
-interface EdgeMap {
-  horizontal: Float32Array
-  vertical: Float32Array
-  magnitude: Float32Array
-}
-
-interface TextRegion {
-  y: number
-  height: number
-  width: number
-  hEnergy: number
-  vEnergy: number
 }
 
 const SAMPLE_GRID = 10
@@ -132,310 +118,6 @@ function detectTransparency(samples: RgbaSample[]): boolean {
   return samples.some((s) => s.a < 250)
 }
 
-function toGrayscale(imageData: ImageData, width: number, height: number): Float32Array {
-  const gray = new Float32Array(width * height)
-  const data = imageData.data
-  for (let i = 0; i < width * height; i++) {
-    const offset = i * 4
-    gray[i] = 0.299 * data[offset] + 0.587 * data[offset + 1] + 0.114 * data[offset + 2]
-  }
-  return gray
-}
-
-function computeEdgeMap(gray: Float32Array, width: number, height: number): EdgeMap {
-  const size = width * height
-  const horizontal = new Float32Array(size)
-  const vertical = new Float32Array(size)
-  const magnitude = new Float32Array(size)
-
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const tl = gray[(y - 1) * width + (x - 1)]
-      const tc = gray[(y - 1) * width + x]
-      const tr = gray[(y - 1) * width + (x + 1)]
-      const ml = gray[y * width + (x - 1)]
-      const mr = gray[y * width + (x + 1)]
-      const bl = gray[(y + 1) * width + (x - 1)]
-      const bc = gray[(y + 1) * width + x]
-      const br = gray[(y + 1) * width + (x + 1)]
-
-      const gx = -tl + tr - 2 * ml + 2 * mr - bl + br
-      const gy = -tl - 2 * tc - tr + bl + 2 * bc + br
-
-      const idx = y * width + x
-      horizontal[idx] = Math.abs(gy)
-      vertical[idx] = Math.abs(gx)
-      magnitude[idx] = Math.sqrt(gx * gx + gy * gy)
-    }
-  }
-
-  return { horizontal, vertical, magnitude }
-}
-
-function detectTextRegions(
-  edgeH: Float32Array,
-  edgeV: Float32Array,
-  width: number,
-  height: number
-): TextRegion[] {
-  const stripHeight = Math.max(3, Math.round(height * 0.05))
-  const candidates: TextRegion[] = []
-
-  for (let y = 0; y < height - stripHeight; y += stripHeight) {
-    let hEnergy = 0
-    let vEnergy = 0
-
-    for (let sy = y; sy < y + stripHeight && sy < height; sy++) {
-      for (let x = 0; x < width; x++) {
-        const idx = sy * width + x
-        hEnergy += edgeH[idx]
-        vEnergy += edgeV[idx]
-      }
-    }
-
-    if (vEnergy > 0 && hEnergy / vEnergy > 2.0) {
-      candidates.push({ y, height: stripHeight, width, hEnergy, vEnergy })
-    }
-  }
-
-  const merged: TextRegion[] = []
-  for (const candidate of candidates) {
-    const last = merged[merged.length - 1]
-    if (last && candidate.y <= last.y + last.height) {
-      const newHeight = candidate.y + candidate.height - last.y
-      merged[merged.length - 1] = {
-        ...last,
-        height: newHeight,
-        hEnergy: last.hEnergy + candidate.hEnergy,
-        vEnergy: last.vEnergy + candidate.vEnergy,
-      }
-    } else {
-      merged.push({ ...candidate })
-    }
-  }
-
-  return merged.filter((r) =>
-    r.width / r.height > 3 || (r.vEnergy > 0 && r.hEnergy / r.vEnergy > 2.0 && r.height < height * 0.8)
-  )
-}
-
-function classifyTextPresence(
-  textRegions: TextRegion[],
-  width: number,
-  height: number
-): { hasText: boolean; textProminence: TextProminence } {
-  if (textRegions.length === 0) {
-    return { hasText: false, textProminence: 'none' }
-  }
-
-  const imageArea = width * height
-  const textArea = textRegions.reduce((sum, r) => sum + r.width * r.height, 0)
-  const coverage = textArea / imageArea
-
-  let textProminence: TextProminence = 'minimal'
-  if (coverage > 0.40) textProminence = 'dominant'
-  else if (coverage > 0.15) textProminence = 'moderate'
-
-  return { hasText: true, textProminence }
-}
-
-function analyzeFontStyles(
-  textRegions: TextRegion[],
-  edgeMag: Float32Array,
-  width: number,
-  height: number
-): { estimatedFontScale: FontScale; fontWeight: FontWeight } {
-  if (textRegions.length === 0) {
-    return { estimatedFontScale: 'medium', fontWeight: 'regular' }
-  }
-
-  const relativeHeights = textRegions.map((r) => r.height / height)
-  const avgRelHeight = relativeHeights.reduce((a, b) => a + b, 0) / relativeHeights.length
-  const heightVariance = relativeHeights.reduce(
-    (sum, h) => sum + (h - avgRelHeight) ** 2,
-    0
-  ) / relativeHeights.length
-
-  let estimatedFontScale: FontScale = 'medium'
-  if (heightVariance > 0.002) {
-    estimatedFontScale = 'mixed'
-  } else if (avgRelHeight < 0.05) {
-    estimatedFontScale = 'small'
-  } else if (avgRelHeight > 0.12) {
-    estimatedFontScale = 'large'
-  }
-
-  const strokeWidths: number[] = []
-  for (const region of textRegions) {
-    const midY = Math.min(height - 1, region.y + Math.floor(region.height / 2))
-    let runLength = 0
-    for (let x = 0; x < width; x++) {
-      if (edgeMag[midY * width + x] > 30) {
-        runLength++
-      } else {
-        if (runLength > 0) strokeWidths.push(runLength)
-        runLength = 0
-      }
-    }
-    if (runLength > 0) strokeWidths.push(runLength)
-  }
-
-  let fontWeight: FontWeight = 'regular'
-  if (strokeWidths.length > 0) {
-    const avgStroke = strokeWidths.reduce((a, b) => a + b, 0) / strokeWidths.length
-    const strokeVariance = strokeWidths.reduce(
-      (sum, s) => sum + (s - avgStroke) ** 2,
-      0
-    ) / strokeWidths.length
-
-    if (strokeVariance > 4) {
-      fontWeight = 'mixed'
-    } else if (avgStroke < 2) {
-      fontWeight = 'light'
-    } else if (avgStroke > 4) {
-      fontWeight = 'bold'
-    }
-  }
-
-  return { estimatedFontScale, fontWeight }
-}
-
-function classifyComplexity(edgeMag: Float32Array, colorCount: number): Complexity {
-  let totalEdge = 0
-  for (let i = 0; i < edgeMag.length; i++) {
-    totalEdge += edgeMag[i]
-  }
-  const avgEdge = totalEdge / edgeMag.length
-
-  const edgeScore = Math.min(100, (avgEdge / 80) * 100)
-  const colorScore = Math.min(100, (colorCount / MAX_DOMINANT_COLORS) * 100)
-  const score = edgeScore * 0.5 + colorScore * 0.5
-
-  if (score < 30) return 'minimal'
-  if (score <= 60) return 'moderate'
-  return 'complex'
-}
-
-function analyzeVisualWeight(edgeMag: Float32Array, width: number, height: number): VisualWeight {
-  const regions = Array.from({ length: 9 }, () => 0)
-  const regionCounts = Array.from({ length: 9 }, () => 0)
-  const thirdW = width / 3
-  const thirdH = height / 3
-
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const col = Math.min(2, Math.floor(x / thirdW))
-      const row = Math.min(2, Math.floor(y / thirdH))
-      const regionIdx = row * 3 + col
-      regions[regionIdx] += edgeMag[y * width + x]
-      regionCounts[regionIdx]++
-    }
-  }
-
-  const regionAvgs = regions.map((sum, i) => regionCounts[i] > 0 ? sum / regionCounts[i] : 0)
-  const totalAvg = regionAvgs.reduce((a, b) => a + b, 0) / 9
-  const maxRegion = Math.max(...regionAvgs)
-
-  if (totalAvg === 0 || maxRegion < totalAvg * 1.5) return 'balanced'
-
-  let cx = 0
-  let cy = 0
-  let totalWeight = 0
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 3; col++) {
-      const w = regionAvgs[row * 3 + col]
-      cx += (col + 0.5) / 3 * w
-      cy += (row + 0.5) / 3 * w
-      totalWeight += w
-    }
-  }
-
-  if (totalWeight === 0) return 'balanced'
-  cx /= totalWeight
-  cy /= totalWeight
-
-  if (cy < 0.4) return 'top'
-  if (cy > 0.6) return 'bottom'
-  if (cx < 0.4) return 'left'
-  if (cx > 0.6) return 'right'
-  return 'center'
-}
-
-interface ContentClassificationInput {
-  originalWidth: number
-  originalHeight: number
-  hasTransparency: boolean
-  textProminence: TextProminence
-  hasText: boolean
-  complexity: Complexity
-  colorCount: number
-  edgeMag: Float32Array
-  width: number
-  height: number
-}
-
-function classifyContentType(input: ContentClassificationInput): ContentType {
-  const {
-    originalWidth, originalHeight, hasTransparency, textProminence,
-    hasText, complexity, colorCount, edgeMag, width, height,
-  } = input
-
-  if (originalWidth < 128 && originalHeight < 128 && hasTransparency) return 'icon'
-  if (textProminence === 'dominant') return 'text-heavy'
-
-  let sharpPixels = 0
-  for (let i = 0; i < edgeMag.length; i++) {
-    if (edgeMag[i] > 50) sharpPixels++
-  }
-  const sharpnessRatio = sharpPixels / edgeMag.length
-
-  if (hasText && sharpnessRatio > 0.08) return 'screenshot'
-
-  if (colorCount >= 4 && complexity === 'complex' && sharpnessRatio < 0.06) return 'photo'
-  if (colorCount <= 3 && complexity === 'minimal') return 'illustration'
-
-  const hasLongLines = detectGeometricPatterns(edgeMag, width, height)
-  if (hasLongLines) return 'chart'
-
-  return 'mixed'
-}
-
-function detectGeometricPatterns(
-  edgeMag: Float32Array,
-  width: number,
-  height: number
-): boolean {
-  const threshold = 30
-  const minRunH = Math.floor(width * 0.3)
-  const minRunV = Math.floor(height * 0.3)
-
-  for (let y = 1; y < height - 1; y += Math.max(1, Math.floor(height / 20))) {
-    let run = 0
-    for (let x = 0; x < width; x++) {
-      if (edgeMag[y * width + x] > threshold) {
-        run++
-        if (run >= minRunH) return true
-      } else {
-        run = 0
-      }
-    }
-  }
-
-  for (let x = 1; x < width - 1; x += Math.max(1, Math.floor(width / 20))) {
-    let run = 0
-    for (let y = 0; y < height; y++) {
-      if (edgeMag[y * width + x] > threshold) {
-        run++
-        if (run >= minRunV) return true
-      } else {
-        run = 0
-      }
-    }
-  }
-
-  return false
-}
-
 function computeAspectRatio(w: number, h: number): string {
   if (w <= 0 || h <= 0) return 'unknown'
 
@@ -478,51 +160,6 @@ function computeAspectRatio(w: number, h: number): string {
   return nearestLabel
 }
 
-interface SummaryInput {
-  filename: string
-  dimensions: string
-  aspectRatio: string
-  brightness: string
-  hasTransparency: boolean
-  colorCount: number
-  contentType?: ContentType
-  complexity?: Complexity
-  textProminence?: TextProminence
-  estimatedFontScale?: FontScale
-  fontWeight?: FontWeight
-  visualWeight?: VisualWeight
-}
-
-function generateSummary(input: SummaryInput): string {
-  const {
-    filename, dimensions, aspectRatio, brightness, hasTransparency,
-    colorCount, contentType, complexity, textProminence,
-    estimatedFontScale, fontWeight, visualWeight,
-  } = input
-
-  const imageLabel = contentType ?? 'image'
-  const parts: string[] = [`${dimensions} ${brightness} ${imageLabel}`]
-
-  if (aspectRatio !== 'unknown') parts.push(`(${aspectRatio})`)
-  if (complexity) parts.push(`${complexity} complexity`)
-
-  if (textProminence && textProminence !== 'none') {
-    let textPart = `${textProminence} text`
-    if (estimatedFontScale && fontWeight) {
-      textPart += ` with ${estimatedFontScale} ${fontWeight} font`
-    }
-    parts.push(textPart)
-  }
-
-  if (hasTransparency) parts.push('with transparency')
-  if (colorCount > 0) parts.push(`${colorCount} dominant colors`)
-  if (visualWeight && visualWeight !== 'balanced') {
-    parts.push(`visually weighted ${visualWeight}`)
-  }
-
-  return `${filename}: ${parts.join(', ')}`
-}
-
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
@@ -538,10 +175,6 @@ export function createFallbackCodemap(filename: string, rawFileSize: number): Im
     dominantColors: [],
     brightness: 'medium',
     hasTransparency: false,
-    summary: generateSummary({
-      filename, dimensions: 'unknown', aspectRatio: 'unknown',
-      brightness: 'medium', hasTransparency: false, colorCount: 0,
-    })
   }
 }
 
@@ -574,58 +207,14 @@ export function analyzeImage(
         const imageData = ctx.getImageData(0, 0, aw, ah)
         const samples = samplePixels(imageData, aw, ah)
 
-        const dimensions = `${w}x${h}`
-        const aspectRatio = computeAspectRatio(w, h)
-        const dominantColors = computeDominantColors(samples)
-        const brightness = classifyBrightness(samples)
-        const hasTransparency = detectTransparency(samples)
-
-        const gray = toGrayscale(imageData, aw, ah)
-        const edgeMap = computeEdgeMap(gray, aw, ah)
-
-        const complexity = classifyComplexity(edgeMap.magnitude, dominantColors.length)
-        const visualWeight = analyzeVisualWeight(edgeMap.magnitude, aw, ah)
-
-        const textRegions = detectTextRegions(edgeMap.horizontal, edgeMap.vertical, aw, ah)
-        const { hasText, textProminence } = classifyTextPresence(textRegions, aw, ah)
-        const fontStyles = hasText
-          ? analyzeFontStyles(textRegions, edgeMap.magnitude, aw, ah)
-          : undefined
-
-        const contentType = classifyContentType({
-          originalWidth: w,
-          originalHeight: h,
-          hasTransparency,
-          textProminence,
-          hasText,
-          complexity,
-          colorCount: dominantColors.length,
-          edgeMag: edgeMap.magnitude,
-          width: aw,
-          height: ah,
-        })
-
         resolve({
           filename,
-          dimensions,
-          aspectRatio,
+          dimensions: `${w}x${h}`,
+          aspectRatio: computeAspectRatio(w, h),
           fileSize: formatFileSize(rawFileSize),
-          dominantColors,
-          brightness,
-          hasTransparency,
-          contentType,
-          complexity,
-          visualWeight,
-          hasText,
-          textProminence,
-          estimatedFontScale: fontStyles?.estimatedFontScale,
-          fontWeight: fontStyles?.fontWeight,
-          summary: generateSummary({
-            filename, dimensions, aspectRatio, brightness, hasTransparency,
-            colorCount: dominantColors.length, contentType, complexity,
-            textProminence, estimatedFontScale: fontStyles?.estimatedFontScale,
-            fontWeight: fontStyles?.fontWeight, visualWeight,
-          })
+          dominantColors: computeDominantColors(samples),
+          brightness: classifyBrightness(samples),
+          hasTransparency: detectTransparency(samples),
         })
       } catch {
         resolve(createFallbackCodemap(filename, rawFileSize))

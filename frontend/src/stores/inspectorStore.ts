@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { InspectorMode, ElementContext, UploadedImage, ImageCodemap, OutputPayload, VisionAnalysis, AnalysisStatus } from '../types/inspector'
+import type { InspectorMode, ElementContext, UploadedImage, ImageCodemap, OutputPayload, VisionAnalysis, AnalysisStatus, ExternalImagePayload } from '../types/inspector'
 
 const MAX_SELECTED_ELEMENTS = 10
 const MAX_UPLOADED_IMAGES = 10
@@ -274,7 +274,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         classes: el.classes,
         elementPrompt: state.elementPrompts[el.selector] ?? ''
       })),
-      externalImages: state.uploadedImages.map((img) => ({
+      externalImages: state.uploadedImages.map((img): ExternalImagePayload => ({
         filename: img.codemap?.filename ?? img.filename,
         dimensions: img.codemap?.dimensions ?? 'unknown',
         aspectRatio: img.codemap?.aspectRatio ?? 'unknown',
@@ -283,14 +283,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         brightness: img.codemap?.brightness ?? 'medium',
         hasTransparency: img.codemap?.hasTransparency ?? false,
         contentType: img.visionAnalysis?.contentType ?? img.codemap?.contentType,
-        complexity: img.codemap?.complexity,
-        visualWeight: img.codemap?.visualWeight,
-        hasText: img.codemap?.hasText,
-        textProminence: img.codemap?.textProminence,
-        estimatedFontScale: img.codemap?.estimatedFontScale,
-        fontWeight: img.codemap?.fontWeight,
-        summary: img.codemap?.summary ?? '',
-        description: img.visionAnalysis?.description ?? img.codemap?.summary ?? '',
+        description: img.visionAnalysis?.description ?? img.filename,
         linkedElementSelector: img.linkedElementSelector,
         visionAnalysis: img.visionAnalysis,
       })),

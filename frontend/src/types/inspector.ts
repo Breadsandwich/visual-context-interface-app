@@ -115,7 +115,6 @@ export interface OutputPayload {
     elementPrompt: string
   }>
   externalImages: ExternalImagePayload[]
-  visual: string | null
   visualPrompt: string
   visualAnalysis: VisionAnalysis | null
   prompt: string

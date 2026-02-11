@@ -6,7 +6,6 @@ import './ImageUpload.css'
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const WEBP_QUALITY = 1.0
 
 function generateId(): string {
   return crypto.randomUUID()
@@ -14,26 +13,6 @@ function generateId(): string {
 
 function truncateSelector(selector: string, maxLen = 30): string {
   return selector.length > maxLen ? selector.slice(0, maxLen - 1) + '\u2026' : selector
-}
-
-function convertToWebP(dataUrl: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = img.naturalWidth
-      canvas.height = img.naturalHeight
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        reject(new Error('Canvas context unavailable'))
-        return
-      }
-      ctx.drawImage(img, 0, 0)
-      resolve(canvas.toDataURL('image/webp', WEBP_QUALITY))
-    }
-    img.onerror = () => reject(new Error('Failed to load image for conversion'))
-    img.src = dataUrl
-  })
 }
 
 export function ImageUpload() {
@@ -75,24 +54,17 @@ export function ImageUpload() {
 
       const reader = new FileReader()
       reader.onload = async () => {
-        const originalDataUrl = reader.result as string
-        try {
-          const webpDataUrl = await convertToWebP(originalDataUrl)
-          const baseName = file.name.replace(/\.[^.]+$/, '')
-          const imageId = generateId()
-          const filename = `${baseName}.webp`
-          addUploadedImage({
-            id: imageId,
-            dataUrl: webpDataUrl,
-            filename,
-            size: webpDataUrl.length
-          })
-          const codemap = await analyzeImage(webpDataUrl, filename, file.size)
-          setImageCodemap(imageId, codemap)
-          analyzeUploadedImage(imageId, webpDataUrl, filename)
-        } catch {
-          showToast(`Failed to convert ${file.name} to WebP`)
-        }
+        const dataUrl = reader.result as string
+        const imageId = generateId()
+        addUploadedImage({
+          id: imageId,
+          dataUrl,
+          filename: file.name,
+          size: file.size
+        })
+        const codemap = await analyzeImage(dataUrl, file.name, file.size)
+        setImageCodemap(imageId, codemap)
+        analyzeUploadedImage(imageId, dataUrl, file.name)
       }
       reader.onerror = () => {
         showToast(`Failed to read file: ${file.name}`)
@@ -173,7 +145,7 @@ export function ImageUpload() {
             <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           <span className="upload-text">Drop images or click to upload</span>
-          <span className="upload-hint">PNG, JPG, WebP — lossless WebP conversion (max 5MB)</span>
+          <span className="upload-hint">PNG, JPG, WebP (max 5MB)</span>
         </div>
       )}
 

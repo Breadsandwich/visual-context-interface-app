@@ -287,7 +287,6 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         linkedElementSelector: img.linkedElementSelector,
         visionAnalysis: img.visionAnalysis,
       })),
-      visual: state.screenshotData,
       visualPrompt: state.screenshotPrompt,
       visualAnalysis: state.screenshotAnalysis,
       prompt: state.userPrompt,

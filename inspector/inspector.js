@@ -17,7 +17,6 @@
   const MAX_OUTER_HTML_LENGTH = 2000;
   const MAX_SCREENSHOT_WIDTH = 1920;
   const MAX_SCREENSHOT_HEIGHT = 1080;
-  const SCREENSHOT_QUALITY = 0.8;
   const MAX_SELECTED_ELEMENTS = 10;
 
   // Matches modern CSS color functions unsupported by html2canvas v1.x
@@ -251,26 +250,6 @@
   }
 
   /**
-   * Check if browser supports WebP format (memoized)
-   */
-  const supportsWebP = (() => {
-    let cached = null;
-    return () => {
-      if (cached === null) {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = 1;
-          canvas.height = 1;
-          cached = canvas.toDataURL('image/webp').startsWith('data:image/webp');
-        } catch {
-          cached = false;
-        }
-      }
-      return cached;
-    };
-  })();
-
-  /**
    * Resize canvas while preserving aspect ratio
    */
   function resizeCanvas(sourceCanvas, maxWidth, maxHeight) {
@@ -475,9 +454,7 @@
       // Resize while preserving aspect ratio
       const resizedCanvas = resizeCanvas(canvas, MAX_SCREENSHOT_WIDTH, MAX_SCREENSHOT_HEIGHT);
 
-      // Use WebP with fallback to JPEG for older browsers
-      const format = supportsWebP() ? 'image/webp' : 'image/jpeg';
-      const imageData = resizedCanvas.toDataURL(format, SCREENSHOT_QUALITY);
+      const imageData = resizedCanvas.toDataURL('image/png');
 
       sendToParent('SCREENSHOT_CAPTURED', {
         imageData: imageData,

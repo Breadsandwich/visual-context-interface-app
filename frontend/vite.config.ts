@@ -14,9 +14,15 @@ function ensureTempDir() {
   }
 }
 
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp']
+
+function isImageFile(filename: string): boolean {
+  return IMAGE_EXTENSIONS.some((ext) => filename.endsWith(ext))
+}
+
 function enforceFileLimit() {
   const files = fs.readdirSync(TEMP_IMAGES_DIR)
-    .filter((f) => f.endsWith('.webp'))
+    .filter(isImageFile)
     .map((f) => ({
       name: f,
       mtime: fs.statSync(path.join(TEMP_IMAGES_DIR, f)).mtimeMs
@@ -76,26 +82,30 @@ function imageSaverPlugin(): Plugin {
               return
             }
 
-            const match = dataUrl.match(/^data:image\/[\w+.-]+;base64,(.+)$/)
+            const match = dataUrl.match(/^data:image\/([\w+.-]+);base64,(.+)$/)
             if (!match) {
               res.statusCode = 400
               res.end(JSON.stringify({ error: 'Invalid data URL format' }))
               return
             }
 
-            const buffer = Buffer.from(match[1], 'base64')
+            const mimeSubtype = match[1]
+            const buffer = Buffer.from(match[2], 'base64')
             if (buffer.length > MAX_FILE_SIZE) {
               res.statusCode = 400
               res.end(JSON.stringify({ error: 'File too large (max 5MB)' }))
               return
             }
 
+            const extMap: Record<string, string> = { png: 'png', jpeg: 'jpg', jpg: 'jpg', webp: 'webp' }
+            const ext = extMap[mimeSubtype] ?? 'png'
+
             ensureTempDir()
             enforceFileLimit()
 
             const timestamp = Date.now()
             const hash = crypto.createHash('md5').update(buffer).digest('hex').slice(0, 4)
-            const filename = `${sanitizedSource}-${timestamp}-${hash}.webp`
+            const filename = `${sanitizedSource}-${timestamp}-${hash}.${ext}`
             const fullPath = path.join(TEMP_IMAGES_DIR, filename)
 
             // Final path traversal check
@@ -128,7 +138,7 @@ function imageSaverPlugin(): Plugin {
           const url = new URL(req.url ?? '', 'http://localhost')
           const filename = url.searchParams.get('filename')
 
-          if (!filename || !/^[\w-]+\.webp$/.test(filename)) {
+          if (!filename || !/^[\w-]+\.(png|jpg|jpeg|webp)$/.test(filename)) {
             res.statusCode = 400
             res.end(JSON.stringify({ error: 'Invalid filename' }))
             return
@@ -162,7 +172,7 @@ function imageSaverPlugin(): Plugin {
         try {
           if (fs.existsSync(TEMP_IMAGES_DIR)) {
             const files = fs.readdirSync(TEMP_IMAGES_DIR)
-              .filter((f) => f.endsWith('.webp'))
+              .filter(isImageFile)
             for (const file of files) {
               fs.unlinkSync(path.join(TEMP_IMAGES_DIR, file))
             }

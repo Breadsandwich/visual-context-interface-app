@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
+import { useVisionAnalysis } from '../hooks/useVisionAnalysis'
 import './SelectionPreview.css'
 
 export function SelectionPreview() {
@@ -13,6 +15,17 @@ export function SelectionPreview() {
     screenshotPrompt,
     setScreenshotPrompt
   } = useInspectorStore()
+
+  const screenshotAnalysis = useInspectorStore((s) => s.screenshotAnalysis)
+  const screenshotAnalysisStatus = useInspectorStore((s) => s.screenshotAnalysisStatus)
+
+  const { analyzeScreenshot, cancelScreenshotAnalysis } = useVisionAnalysis()
+
+  useEffect(() => {
+    if (!screenshotData) return
+    analyzeScreenshot(screenshotData)
+    return () => cancelScreenshotAnalysis()
+  }, [screenshotData, analyzeScreenshot, cancelScreenshotAnalysis])
 
   if (selectedElements.length === 0 && !screenshotData) {
     return (
@@ -81,6 +94,36 @@ export function SelectionPreview() {
             </button>
           </div>
           <img src={screenshotData} alt="Captured screenshot" />
+
+          {screenshotAnalysisStatus === 'analyzing' && (
+            <div className="analysis-status analyzing" role="status" aria-live="polite">
+              <span className="analysis-spinner" />
+              <span>Analyzing with Claude Vision...</span>
+            </div>
+          )}
+          {screenshotAnalysisStatus === 'complete' && screenshotAnalysis && (
+            <div className="analysis-result" role="status" aria-live="polite">
+              <p className="analysis-description">{screenshotAnalysis.description}</p>
+              <div className="analysis-meta">
+                <span className="analysis-badge">{screenshotAnalysis.contentType}</span>
+                {screenshotAnalysis.uiElements.length > 0 && (
+                  <span className="analysis-badge">{screenshotAnalysis.uiElements.length} UI elements</span>
+                )}
+              </div>
+            </div>
+          )}
+          {screenshotAnalysisStatus === 'error' && (
+            <div className="analysis-status error" role="alert">
+              <span>Analysis failed</span>
+              <button
+                className="analysis-retry"
+                onClick={() => analyzeScreenshot(screenshotData)}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           <textarea
             className="card-prompt screenshot-prompt"
             value={screenshotPrompt}

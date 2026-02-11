@@ -1,5 +1,7 @@
 """FastAPI proxy service for Visual Context Interface."""
 
+import asyncio
+import json as json_module
 import logging
 import os
 from urllib.parse import unquote
@@ -9,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import httpx
 from pathlib import Path
+from pydantic import BaseModel, Field, field_validator
 
 from injection import inject_inspector_script, rewrite_asset_paths
 
@@ -53,6 +56,55 @@ async def health_check():
     }
 
 
+class AnalyzeImageRequest(BaseModel):
+    image_data_url: str = Field(..., description="Base64 data URL of the image")
+    context: str = Field("", description="Optional context hint", max_length=500)
+
+    @field_validator("image_data_url")
+    @classmethod
+    def validate_data_url(cls, v: str) -> str:
+        if not v.startswith("data:image/"):
+            raise ValueError("Must be a valid image data URL")
+        if len(v) > 10 * 1024 * 1024:
+            raise ValueError("Image data too large (max ~10MB)")
+        return v
+
+
+@app.post("/api/analyze-image")
+async def analyze_image_endpoint(request_body: AnalyzeImageRequest):
+    """Analyze an image using Claude Vision API."""
+    try:
+        from vision import analyze_image
+
+        result = await asyncio.to_thread(
+            analyze_image,
+            request_body.image_data_url,
+            request_body.context,
+        )
+        return {"success": True, "data": result}
+    except json_module.JSONDecodeError as e:
+        logger.error(f"Claude returned non-JSON response: {e}")
+        return Response(
+            content=json_module.dumps({"success": False, "error": "Invalid response from vision API"}),
+            status_code=502,
+            media_type="application/json",
+        )
+    except ValueError as e:
+        logger.warning(f"Vision config error: {e}")
+        return Response(
+            content=json_module.dumps({"success": False, "error": str(e)}),
+            status_code=503,
+            media_type="application/json",
+        )
+    except Exception:
+        logger.exception("Vision analysis failed")
+        return Response(
+            content=json_module.dumps({"success": False, "error": "Analysis failed"}),
+            status_code=500,
+            media_type="application/json",
+        )
+
+
 @app.get("/inspector/{filename:path}")
 async def serve_inspector(filename: str):
     """Serve inspector scripts with path traversal protection."""
@@ -78,6 +130,10 @@ async def serve_inspector(filename: str):
 @app.api_route("/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def proxy_request(path: str, request: Request):
     """Proxy requests to target application with script injection."""
+    # Reject WebSocket upgrades early — h11 crashes on 101 Switching Protocols
+    if request.headers.get("upgrade", "").lower() == "websocket":
+        return Response(content="WebSocket not supported through proxy", status_code=426)
+
     # Validate path doesn't contain traversal attempts (check decoded form too)
     decoded_path = unquote(path)
     if ".." in path or ".." in decoded_path:
@@ -146,9 +202,13 @@ async def proxy_request(path: str, request: Request):
             if not _is_external_target:
                 response_headers["X-Frame-Options"] = "SAMEORIGIN"
 
+            status_code = response.status_code
+            if status_code < 200 or status_code >= 600:
+                status_code = 502
+
             return Response(
                 content=content,
-                status_code=response.status_code,
+                status_code=status_code,
                 headers=response_headers,
                 media_type=content_type.split(";")[0] if content_type else None,
             )
@@ -182,7 +242,7 @@ async def proxy_root(request: Request):
 if _is_external_target:
 
     # Paths that should never be forwarded to the target app
-    _RESERVED_PREFIXES = ("health", "proxy", "inspector", "docs", "openapi.json")
+    _RESERVED_PREFIXES = ("health", "proxy", "inspector", "api", "docs", "openapi.json")
 
     @app.api_route(
         "/{path:path}",
@@ -196,6 +256,10 @@ if _is_external_target:
         These arrive at the FastAPI server (port 8000) without the /proxy/ prefix
         and must be forwarded to the target application without HTML injection.
         """
+        # Reject WebSocket upgrades early — h11 crashes on 101 Switching Protocols
+        if request.headers.get("upgrade", "").lower() == "websocket":
+            return Response(content="WebSocket not supported through proxy", status_code=426)
+
         first_segment = path.split("/")[0] if path else ""
         if first_segment in _RESERVED_PREFIXES:
             return Response(content="Not found", status_code=404)
@@ -241,9 +305,13 @@ if _is_external_target:
                 response_headers["Access-Control-Allow-Origin"] = FRONTEND_ORIGIN
                 response_headers["Content-Security-Policy"] = f"frame-ancestors 'self' {FRONTEND_ORIGIN}"
 
+                status_code = response.status_code
+                if status_code < 200 or status_code >= 600:
+                    status_code = 502
+
                 return Response(
                     content=response.content,
-                    status_code=response.status_code,
+                    status_code=status_code,
                     headers=response_headers,
                     media_type=content_type.split(";")[0] if content_type else None,
                 )

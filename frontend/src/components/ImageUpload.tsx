@@ -1,11 +1,11 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
 import { analyzeImage } from '../utils/imageAnalyzer'
+import { useVisionAnalysis } from '../hooks/useVisionAnalysis'
 import './ImageUpload.css'
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const WEBP_QUALITY = 1.0
 
 function generateId(): string {
   return crypto.randomUUID()
@@ -13,26 +13,6 @@ function generateId(): string {
 
 function truncateSelector(selector: string, maxLen = 30): string {
   return selector.length > maxLen ? selector.slice(0, maxLen - 1) + '\u2026' : selector
-}
-
-function convertToWebP(dataUrl: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = img.naturalWidth
-      canvas.height = img.naturalHeight
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        reject(new Error('Canvas context unavailable'))
-        return
-      }
-      ctx.drawImage(img, 0, 0)
-      resolve(canvas.toDataURL('image/webp', WEBP_QUALITY))
-    }
-    img.onerror = () => reject(new Error('Failed to load image for conversion'))
-    img.src = dataUrl
-  })
 }
 
 export function ImageUpload() {
@@ -43,6 +23,7 @@ export function ImageUpload() {
   const linkImageToElement = useInspectorStore((s) => s.linkImageToElement)
   const setImageCodemap = useInspectorStore((s) => s.setImageCodemap)
   const showToast = useInspectorStore((s) => s.showToast)
+  const { analyzeUploadedImage } = useVisionAnalysis()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const [isDragging, setIsDragging] = useState(false)
@@ -73,30 +54,24 @@ export function ImageUpload() {
 
       const reader = new FileReader()
       reader.onload = async () => {
-        const originalDataUrl = reader.result as string
-        try {
-          const webpDataUrl = await convertToWebP(originalDataUrl)
-          const baseName = file.name.replace(/\.[^.]+$/, '')
-          const imageId = generateId()
-          const filename = `${baseName}.webp`
-          addUploadedImage({
-            id: imageId,
-            dataUrl: webpDataUrl,
-            filename,
-            size: webpDataUrl.length
-          })
-          const codemap = await analyzeImage(webpDataUrl, filename, file.size)
-          setImageCodemap(imageId, codemap)
-        } catch {
-          showToast(`Failed to convert ${file.name} to WebP`)
-        }
+        const dataUrl = reader.result as string
+        const imageId = generateId()
+        addUploadedImage({
+          id: imageId,
+          dataUrl,
+          filename: file.name,
+          size: file.size
+        })
+        const codemap = await analyzeImage(dataUrl, file.name, file.size)
+        setImageCodemap(imageId, codemap)
+        analyzeUploadedImage(imageId, dataUrl, file.name)
       }
       reader.onerror = () => {
         showToast(`Failed to read file: ${file.name}`)
       }
       reader.readAsDataURL(file)
     })
-  }, [addUploadedImage, setImageCodemap, showToast])
+  }, [addUploadedImage, setImageCodemap, showToast, analyzeUploadedImage])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -170,7 +145,7 @@ export function ImageUpload() {
             <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           <span className="upload-text">Drop images or click to upload</span>
-          <span className="upload-hint">PNG, JPG, WebP — lossless WebP conversion (max 5MB)</span>
+          <span className="upload-hint">PNG, JPG, WebP (max 5MB)</span>
         </div>
       )}
 
@@ -247,6 +222,21 @@ export function ImageUpload() {
                   )}
                 </div>
 
+                {img.analysisStatus === 'analyzing' && (
+                  <span className="thumbnail-analysis-badge analyzing" aria-label="Analyzing">
+                    <span className="mini-spinner" />
+                  </span>
+                )}
+                {img.analysisStatus === 'complete' && (
+                  <span className="thumbnail-analysis-badge complete" aria-label="Analysis complete">
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                )}
+                {img.analysisStatus === 'error' && (
+                  <span className="thumbnail-analysis-badge error" aria-label="Analysis failed">!</span>
+                )}
                 <span className="thumbnail-name">{img.filename}</span>
                 {img.linkedElementSelector && (
                   <span className="thumbnail-linked-to">

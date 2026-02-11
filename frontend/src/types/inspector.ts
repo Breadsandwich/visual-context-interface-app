@@ -14,11 +14,6 @@ export interface ElementContext {
 }
 
 export type ContentType = 'screenshot' | 'photo' | 'illustration' | 'icon' | 'chart' | 'text-heavy' | 'mixed'
-export type Complexity = 'minimal' | 'moderate' | 'complex'
-export type VisualWeight = 'top' | 'center' | 'bottom' | 'left' | 'right' | 'balanced'
-export type TextProminence = 'none' | 'minimal' | 'moderate' | 'dominant'
-export type FontScale = 'small' | 'medium' | 'large' | 'mixed'
-export type FontWeight = 'light' | 'regular' | 'bold' | 'mixed'
 
 export interface ImageCodemap {
   filename: string
@@ -28,19 +23,25 @@ export interface ImageCodemap {
   dominantColors: string[]
   brightness: 'dark' | 'medium' | 'light'
   hasTransparency: boolean
-  summary: string
   contentType?: ContentType
-  complexity?: Complexity
-  visualWeight?: VisualWeight
-  hasText?: boolean
-  textProminence?: TextProminence
-  estimatedFontScale?: FontScale
-  fontWeight?: FontWeight
 }
+
+export interface VisionAnalysis {
+  description: string
+  contentType: ContentType
+  uiElements: string[]
+  textContent: string
+  colorPalette: string[]
+  layout: string
+  accessibility: string
+}
+
+export type AnalysisStatus = 'idle' | 'analyzing' | 'complete' | 'error'
 
 export interface ExternalImagePayload extends ImageCodemap {
   description: string
   linkedElementSelector?: string
+  visionAnalysis?: VisionAnalysis
 }
 
 export interface UploadedImage {
@@ -50,6 +51,9 @@ export interface UploadedImage {
   size: number
   linkedElementSelector?: string
   codemap?: ImageCodemap
+  visionAnalysis?: VisionAnalysis
+  analysisStatus?: AnalysisStatus
+  analysisError?: string
 }
 
 export interface InspectorEvent {
@@ -111,8 +115,8 @@ export interface OutputPayload {
     elementPrompt: string
   }>
   externalImages: ExternalImagePayload[]
-  visual: string | null
   visualPrompt: string
+  visualAnalysis: VisionAnalysis | null
   prompt: string
   timestamp: string
 }

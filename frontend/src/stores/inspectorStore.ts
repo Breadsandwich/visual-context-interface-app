@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { InspectorMode, ElementContext, UploadedImage, ImageCodemap, OutputPayload } from '../types/inspector'
+import type { InspectorMode, ElementContext, UploadedImage, ImageCodemap, OutputPayload, VisionAnalysis, AnalysisStatus, ExternalImagePayload } from '../types/inspector'
 
 const MAX_SELECTED_ELEMENTS = 10
 const MAX_UPLOADED_IMAGES = 10
@@ -14,6 +14,8 @@ interface InspectorState {
   toastMessage: string | null
   screenshotData: string | null
   screenshotPrompt: string
+  screenshotAnalysis: VisionAnalysis | null
+  screenshotAnalysisStatus: AnalysisStatus
   currentRoute: string
   userPrompt: string
   isInspectorReady: boolean
@@ -32,10 +34,14 @@ interface InspectorState {
   dismissToast: () => void
   setScreenshotData: (data: string | null) => void
   setScreenshotPrompt: (prompt: string) => void
+  setScreenshotAnalysis: (analysis: VisionAnalysis | null) => void
+  setScreenshotAnalysisStatus: (status: AnalysisStatus) => void
   setCurrentRoute: (route: string) => void
   setUserPrompt: (prompt: string) => void
   setInspectorReady: (ready: boolean) => void
   setImageCodemap: (imageId: string, codemap: ImageCodemap) => void
+  setImageVisionAnalysis: (imageId: string, analysis: VisionAnalysis) => void
+  setImageAnalysisStatus: (imageId: string, status: AnalysisStatus) => void
   linkImageToElement: (imageId: string, selector: string | null) => void
   clearSelection: () => void
   clearScreenshot: () => void
@@ -54,6 +60,8 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   toastMessage: null,
   screenshotData: null,
   screenshotPrompt: '',
+  screenshotAnalysis: null,
+  screenshotAnalysisStatus: 'idle',
   currentRoute: '/',
   userPrompt: '',
   isInspectorReady: false,
@@ -145,7 +153,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
       setTimeout(() => get().showToast(`Maximum ${MAX_UPLOADED_IMAGES} images allowed`), 0)
       return state
     }
-    return { uploadedImages: [...state.uploadedImages, image] }
+    return { uploadedImages: [...state.uploadedImages, { ...image, analysisStatus: 'idle' as const }] }
   }),
 
   removeUploadedImage: (id) => set((state) => ({
@@ -181,6 +189,10 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
 
   setScreenshotPrompt: (prompt) => set({ screenshotPrompt: prompt }),
 
+  setScreenshotAnalysis: (analysis) => set({ screenshotAnalysis: analysis }),
+
+  setScreenshotAnalysisStatus: (status) => set({ screenshotAnalysisStatus: status }),
+
   setCurrentRoute: (route) => set({ currentRoute: route }),
 
   setUserPrompt: (prompt) => set({ userPrompt: prompt }),
@@ -190,6 +202,18 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   setImageCodemap: (imageId, codemap) => set((state) => ({
     uploadedImages: state.uploadedImages.map((img) =>
       img.id === imageId ? { ...img, codemap } : img
+    )
+  })),
+
+  setImageVisionAnalysis: (imageId, analysis) => set((state) => ({
+    uploadedImages: state.uploadedImages.map((img) =>
+      img.id === imageId ? { ...img, visionAnalysis: analysis } : img
+    )
+  })),
+
+  setImageAnalysisStatus: (imageId, status) => set((state) => ({
+    uploadedImages: state.uploadedImages.map((img) =>
+      img.id === imageId ? { ...img, analysisStatus: status } : img
     )
   })),
 
@@ -211,7 +235,12 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     )
   })),
 
-  clearScreenshot: () => set({ screenshotData: null, screenshotPrompt: '' }),
+  clearScreenshot: () => set({
+    screenshotData: null,
+    screenshotPrompt: '',
+    screenshotAnalysis: null,
+    screenshotAnalysisStatus: 'idle',
+  }),
 
   resetAll: () => set((state) => ({
     mode: 'interaction',
@@ -221,6 +250,8 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     toastMessage: null,
     screenshotData: null,
     screenshotPrompt: '',
+    screenshotAnalysis: null,
+    screenshotAnalysisStatus: 'idle',
     userPrompt: '',
     isSidebarOpen: false,
     clearSelectionTrigger: state.clearSelectionTrigger + 1
@@ -243,7 +274,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         classes: el.classes,
         elementPrompt: state.elementPrompts[el.selector] ?? ''
       })),
-      externalImages: state.uploadedImages.map((img) => ({
+      externalImages: state.uploadedImages.map((img): ExternalImagePayload => ({
         filename: img.codemap?.filename ?? img.filename,
         dimensions: img.codemap?.dimensions ?? 'unknown',
         aspectRatio: img.codemap?.aspectRatio ?? 'unknown',
@@ -251,19 +282,13 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         dominantColors: img.codemap?.dominantColors ?? [],
         brightness: img.codemap?.brightness ?? 'medium',
         hasTransparency: img.codemap?.hasTransparency ?? false,
-        contentType: img.codemap?.contentType,
-        complexity: img.codemap?.complexity,
-        visualWeight: img.codemap?.visualWeight,
-        hasText: img.codemap?.hasText,
-        textProminence: img.codemap?.textProminence,
-        estimatedFontScale: img.codemap?.estimatedFontScale,
-        fontWeight: img.codemap?.fontWeight,
-        summary: img.codemap?.summary ?? '',
-        description: img.codemap?.summary ?? '',
+        contentType: img.visionAnalysis?.contentType ?? img.codemap?.contentType,
+        description: img.visionAnalysis?.description ?? img.filename,
         linkedElementSelector: img.linkedElementSelector,
+        visionAnalysis: img.visionAnalysis,
       })),
-      visual: state.screenshotData,
       visualPrompt: state.screenshotPrompt,
+      visualAnalysis: state.screenshotAnalysis,
       prompt: state.userPrompt,
       timestamp: new Date().toISOString()
     }

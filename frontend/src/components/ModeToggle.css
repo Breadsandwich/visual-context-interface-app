@@ -2,7 +2,7 @@
   display: flex;
   gap: 0.5rem;
   padding: 0.5rem;
-  background: #2a2a2a;
+  background: var(--adom-bg-card, #F8F9FC);
   border-radius: 0.5rem;
 }
 
@@ -14,19 +14,19 @@
   border: none;
   border-radius: 0.375rem;
   background: transparent;
-  color: #999;
+  color: var(--adom-text-muted, #9CA3AF);
   cursor: pointer;
   transition: all 0.2s;
   font-size: 0.875rem;
 }
 
 .mode-button:hover {
-  background: #3a3a3a;
-  color: #fff;
+  background: var(--adom-bg-active, #EEF0FA);
+  color: var(--adom-text, #1E2A3A);
 }
 
 .mode-button.active {
-  background: #646cff;
+  background: var(--adom-primary, #4361EE);
   color: #fff;
 }
 

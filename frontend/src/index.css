@@ -12,13 +12,22 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* ADOM Design Tokens */
-  --adom-primary: #2D8AE1;
-  --adom-deep-space: #0C2739;
-  --adom-horizon: #00235A;
-  --adom-aqua: #2D8AE1;
-  --adom-neon: #00F26C;
-  --adom-gradient: linear-gradient(135deg, #2D8AE1, #00F26C);
+  /* ADOM Design Tokens – Light Theme */
+  --adom-primary: #4361EE;
+  --adom-deep-space: #FFFFFF;
+  --adom-horizon: #FFFFFF;
+  --adom-aqua: #4361EE;
+  --adom-neon: #4361EE;
+  --adom-accent: #7B2FF7;
+  --adom-gradient: linear-gradient(135deg, #4361EE, #7B2FF7);
+  --adom-bg: #FFFFFF;
+  --adom-bg-active: #EEF0FA;
+  --adom-bg-card: #F8F9FC;
+  --adom-border: #E5E7EB;
+  --adom-border-light: #F0F1F5;
+  --adom-text: #1E2A3A;
+  --adom-text-secondary: #6B7280;
+  --adom-text-muted: #9CA3AF;
   --radius-pill: 50px;
   --radius-input: 0.5rem;
   --radius-card: 0.5rem;

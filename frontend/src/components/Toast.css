@@ -6,13 +6,13 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.625rem 1rem;
-  background: linear-gradient(135deg, #2D8AE1, #00F26C);
+  background: var(--adom-gradient, linear-gradient(135deg, #4361EE, #7B2FF7));
   border-radius: 50px;
   color: #fff;
   font-size: 0.875rem;
   font-weight: 500;
   z-index: 10000;
-  box-shadow: 0 4px 20px rgba(45, 138, 225, 0.35);
+  box-shadow: 0 4px 20px rgba(67, 97, 238, 0.3);
   animation: toast-slide-in 0.3s ease-out;
 }
 

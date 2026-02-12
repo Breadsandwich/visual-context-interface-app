@@ -7,23 +7,23 @@
 .instruction-input label {
   font-size: 0.875rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--adom-text-secondary, #6B7280);
 }
 
 .instruction-input .sub-label {
   font-size: 0.8125rem;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--adom-text-muted, #9CA3AF);
   margin-top: 0.25rem;
 }
 
 .instruction-input textarea {
   width: 100%;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--adom-bg, #FFFFFF);
+  border: 1px solid var(--adom-border, #E5E7EB);
   border-radius: 0.5rem;
-  color: #fff;
+  color: var(--adom-text, #1E2A3A);
   font-family: inherit;
   font-size: 0.875rem;
   resize: vertical;
@@ -32,9 +32,9 @@
 
 .instruction-input textarea:focus {
   outline: none;
-  border-color: #2D8AE1;
+  border-color: var(--adom-primary, #4361EE);
 }
 
 .instruction-input textarea::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--adom-text-muted, #9CA3AF);
 }

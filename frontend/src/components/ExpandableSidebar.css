@@ -24,7 +24,7 @@
     width: 245px;
     height: 110px;
     background: #00f26c;
-    opacity: 0.15;
+    opacity: 0.1;
     filter: blur(100px);
     pointer-events: none;
     z-index: 1;

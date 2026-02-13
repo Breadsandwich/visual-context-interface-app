@@ -3,11 +3,12 @@ import './Toast.css'
 
 export function Toast() {
   const toastMessage = useInspectorStore((s) => s.toastMessage)
+  const isSidebarOpen = useInspectorStore((s) => s.isSidebarOpen)
 
   if (!toastMessage) return null
 
   return (
-    <div className="toast" role="status" aria-live="polite">
+    <div className={`toast ${isSidebarOpen ? 'sidebar-open' : ''}`} role="status" aria-live="polite">
       <span className="toast-message">{toastMessage}</span>
       <button
         className="toast-close"

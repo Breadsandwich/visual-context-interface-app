@@ -28,8 +28,17 @@ services:
     build:
       context: ./dummy-target
       dockerfile: Dockerfile
+    command: >
+      sh -c "
+        echo 'Waiting for project source...' &&
+        while [ ! -f /app/package.json ]; do sleep 2; done &&
+        npm install &&
+        npm run dev
+      "
     ports:
       - "3001"
+    volumes:
+      - vci-output:/app
     networks:
       - dokploy-network
 

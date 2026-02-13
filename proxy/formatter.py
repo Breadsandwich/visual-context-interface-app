@@ -116,6 +116,18 @@ def _build_elements(contexts: Optional[list[dict]], include_html: bool) -> str:
             truncated = html[:MAX_HTML_LENGTH] + "..." if len(html) > MAX_HTML_LENGTH else html
             lines.append(f"   - HTML: `{truncated}`")
 
+        # Render linked images nested under this element
+        for img in ctx.get("linkedImages", []):
+            label = img.get("filename", "image")
+            dims = img.get("dimensions", "")
+            lines.append(f"   - Linked image: **{label}** ({dims})")
+            if include_html:
+                summary = _format_vision_summary(img.get("visionAnalysis"))
+                if summary:
+                    lines.append(f"     - {summary}")
+                elif img.get("description"):
+                    lines.append(f"     - {img['description']}")
+
         lines.append("")
 
     return "\n".join(lines) + "\n"

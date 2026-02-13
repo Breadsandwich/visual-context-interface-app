@@ -144,6 +144,22 @@ function buildElements(contexts, includeHtml) {
       lines.push(`   - HTML: \`${truncatedHtml}\``)
     }
 
+    // Render linked images nested under this element
+    const linkedImages = ctx.linkedImages || []
+    for (const img of linkedImages) {
+      const label = img.filename || 'image'
+      const dims = img.dimensions || ''
+      lines.push(`   - Linked image: **${label}** (${dims})`)
+      if (includeHtml) {
+        const summary = formatVisionSummary(img.visionAnalysis)
+        if (summary) {
+          lines.push(`     - ${summary}`)
+        } else if (img.description) {
+          lines.push(`     - ${img.description}`)
+        }
+      }
+    }
+
     lines.push('')
   }
 

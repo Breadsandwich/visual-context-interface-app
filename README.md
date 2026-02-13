@@ -8,31 +8,37 @@ A Dockerized development tool that enables visual DOM inspection and screenshot 
 - **DOM Element Selection**: Hover highlighting and click-to-select with full element metadata capture
 - **Screenshot Capture**: Region-based screenshot capture using html2canvas
 - **Structured Output**: Generates JSON payloads with route, element context, visual data, and user instructions
-- **Clipboard Integration**: One-click copy for use with AI coding assistants like Claude Code
+- **Headless Agent**: One-click "Send to ADOM" triggers a Claude-powered agent that reads your visual context and edits source files automatically
+- **CLI & MCP Integration**: Pipe formatted context to Claude Code via CLI or register as an MCP tool for automatic context retrieval
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Docker Compose Network                       │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────────────┐      ┌──────────────────────┐        │
-│  │   visual-context-    │      │   dummy-target       │        │
-│  │   tool               │      │   (React App)        │        │
-│  │                      │      │                      │        │
-│  │  ┌────────────────┐  │      │  localhost:3001      │        │
-│  │  │ React Frontend │  │      │                      │        │
-│  │  │ Port 5173      │  │      └──────────────────────┘        │
-│  │  └───────┬────────┘  │                │                     │
-│  │          │           │                │                     │
-│  │  ┌───────▼────────┐  │                │                     │
-│  │  │ FastAPI Proxy  │◄─┼────────────────┘                     │
-│  │  │ Port 8000      │  │   Proxies & injects inspector.js    │
-│  │  └────────────────┘  │                                      │
-│  └──────────────────────┘                                      │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                    Docker Compose Network                        │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌───────────────────────────┐    ┌──────────────────────┐      │
+│  │   visual-context-tool     │    │   dummy-target       │      │
+│  │                           │    │   (React App)        │      │
+│  │  ┌─────────────────────┐  │    │  localhost:3001      │      │
+│  │  │  React Frontend     │  │    └──────────────────────┘      │
+│  │  │  Port 5173          │  │               │                  │
+│  │  └──────────┬──────────┘  │               │                  │
+│  │             │              │               │                  │
+│  │  ┌──────────▼──────────┐  │               │                  │
+│  │  │  FastAPI Proxy      │◄─┼───────────────┘                  │
+│  │  │  Port 8000          │  │  Proxies & injects inspector.js  │
+│  │  └──────────┬──────────┘  │                                  │
+│  │             │ POST        │                                  │
+│  │  ┌──────────▼──────────┐  │                                  │
+│  │  │  Agent Service      │  │                                  │
+│  │  │  Port 8001 (internal)│  │                                  │
+│  │  │  Claude API → tools │  │                                  │
+│  │  └─────────────────────┘  │                                  │
+│  └───────────────────────────┘                                  │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ## Prerequisites
@@ -50,19 +56,25 @@ A Dockerized development tool that enables visual DOM inspection and screenshot 
    cd visual-context-interface-app
    ```
 
-2. **Start all services**
+2. **Set your Anthropic API key** (required for the headless agent)
+
+   ```bash
+   export ANTHROPIC_API_KEY=sk-ant-...
+   ```
+
+3. **Start all services**
 
    ```bash
    docker-compose up --build
    ```
 
-3. **Access the application**
+4. **Access the application**
 
    - **Frontend UI**: http://localhost:5173
    - **Proxy API**: http://localhost:8000
    - **Dummy Target** (test app): http://localhost:3001
 
-4. **Stop services**
+5. **Stop services**
 
    ```bash
    docker-compose down
@@ -134,6 +146,10 @@ For local development, set these environment variables:
 | `TARGET_HOST` | `localhost` | Host of the target React app |
 | `TARGET_PORT` | `3001` | Port of the target React app |
 | `VITE_PROXY_URL` | `http://localhost:8000` | Proxy URL for frontend |
+| `ANTHROPIC_API_KEY` | — | API key for the headless agent (required for "Send to ADOM") |
+| `ANTHROPIC_AGENT_MODEL` | `claude-sonnet-4-5-20250929` | Claude model used by the agent |
+| `VCI_OUTPUT_DIR` | `/output` | Directory the agent reads/writes (mounted project root) |
+| `VCI_PROJECT_DIR` | `.` | Host path mounted as `/output` in Docker |
 
 Example:
 
@@ -159,10 +175,19 @@ visual-context-interface-app/
 │   │   ├── types/         # TypeScript interfaces
 │   │   └── utils/         # Utility functions
 │   └── package.json
-├── proxy/                 # FastAPI proxy service
-│   ├── main.py            # Main application
+├── proxy/                 # FastAPI proxy + agent service
+│   ├── main.py            # Proxy application (port 8000)
+│   ├── agent.py           # Headless agent service (port 8001, internal)
+│   ├── agent_tools.py     # Sandboxed file tools for the agent
+│   ├── formatter.py       # Python port of the prompt formatter
 │   ├── injection.py       # HTML injection logic
 │   └── requirements.txt
+├── cli/                   # CLI and MCP integration
+│   ├── vci-format.js      # CLI prompt formatter
+│   ├── lib/
+│   │   └── formatter.js   # Shared formatting logic
+│   └── mcp/
+│       └── server.js      # MCP server for Claude Code
 ├── inspector/             # Injected browser scripts
 │   ├── inspector.js       # DOM inspection logic
 │   └── html2canvas.min.js # Screenshot library
@@ -176,28 +201,26 @@ visual-context-interface-app/
 
 1. **Open the tool** at http://localhost:5173
 2. **Toggle Mode**:
-   - **Interact**: Normal browsing—click through the target app
+   - **Interact**: Normal browsing — click through the target app
    - **Inspect**: Hover to highlight elements, click to select
    - **Screenshot**: Drag to capture a region
-3. **Select an element** by clicking in Inspect mode
-4. **Add instructions** in the text input (e.g., "Move this button 10px left")
-5. **Export** the payload to clipboard or console
+3. **Select elements** by clicking in Inspect mode (multi-select supported, up to 10)
+4. **Upload reference images** (optional) — design mockups, screenshots, etc.
+5. **Add instructions** in the text input (e.g., "Change the button color to blue")
+6. **Click "Send to ADOM"** — the agent picks up the context and edits your source files
 
-### Output Payload Format
+The UI shows a "Working..." spinner while the agent runs. When complete, a "Work done" toast appears and the iframe auto-reloads to show the changes.
 
-```json
-{
-  "route": "/about",
-  "context": {
-    "html": "<button class=\"btn primary\">Click me</button>",
-    "selector": "button.btn.primary",
-    "tagName": "BUTTON",
-    "id": "",
-    "classes": ["btn", "primary"]
-  },
-  "visual": "data:image/webp;base64,...",
-  "prompt": "Move this button 10px to the left"
-}
+### Alternative: CLI & MCP
+
+If you prefer to use Claude Code directly instead of the built-in agent:
+
+```bash
+# Pipe formatted context to Claude Code
+claude "$(node cli/vci-format.js)"
+
+# Or register as an MCP tool (auto-detected by Claude Code)
+claude mcp add vci-context -- node cli/mcp/server.js
 ```
 
 ## Tech Stack
@@ -206,6 +229,8 @@ visual-context-interface-app/
 |-----------|------------|
 | Frontend | React 18, TypeScript, Vite, Zustand |
 | Proxy | Python, FastAPI, httpx, BeautifulSoup4 |
+| Agent | Python, Anthropic SDK (AsyncAnthropic), Claude Sonnet |
+| CLI/MCP | Node.js, @modelcontextprotocol/sdk |
 | Screenshots | html2canvas |
 | Containerization | Docker, Docker Compose |
 
@@ -255,3 +280,60 @@ The HTML `rewrite_asset_paths` function only rewrites `href`/`src` attributes in
 - The resulting codemap includes dimensions, aspect ratio, dominant colors, brightness, transparency, complexity, visual weight distribution, text prominence, font hints, and content type — giving the LLM semantic understanding of the image without seeing pixels
 
 **Code location**: `frontend/src/utils/imageAnalyzer.ts`
+
+### From Copy-Paste JSON to Automated Agent
+
+**Problem**: The original VCI workflow required the user to manually copy a JSON payload from the UI, switch to a terminal, paste it into Claude Code, wait for a response, then switch back to VCI to verify the changes. This context-switching loop was slow and broke the visual feedback cycle that made VCI useful in the first place.
+
+The JSON payload was also designed for human-readable clipboard output — raw element metadata, base64 image data, and flat key-value pairs. It wasn't structured for an LLM to act on. Claude Code would receive a blob of JSON and have to infer which files to edit, what the user wanted changed, and how the elements mapped to source code. The user became the integration layer between two tools.
+
+**Why the pivot**: The core insight was that VCI already had everything an agent needs to act autonomously — source file paths (from React Fiber's `_debugSource`), CSS selectors, element HTML, user instructions, and design reference images. The missing piece wasn't more data; it was a loop that could read the context, call Claude, execute file edits, and report results without the user leaving the browser.
+
+Three integration approaches were evaluated:
+
+1. **Clipboard + manual paste** (original) — zero infrastructure but maximum friction. Every edit required a full context switch
+2. **CLI pipe / MCP tool** — `claude "$(vci format)"` or an MCP server. Eliminated the paste step but still required a terminal. Good for power users who want control over the agent invocation
+3. **Headless agent inside Docker** — fully automated. Click "Send to ADOM" and the agent runs in the background. The UI polls for status and auto-reloads the iframe when done
+
+The headless approach was chosen as the primary path because it closes the feedback loop entirely: select elements, describe the change, click, see the result. The CLI and MCP integrations were kept as alternatives for users who want to pipe context into their own Claude Code sessions.
+
+**How it works under the hood**:
+
+```
+User clicks "Send to ADOM"
+       │
+       ▼
+Proxy writes .vci/context.json (with timestamped backup)
+       │
+       ▼
+Proxy POSTs to localhost:8001/agent/run (fire-and-forget, internal only)
+       │
+       ▼
+Agent reads context.json → formatter builds a structured prompt
+       │
+       ▼
+Prompt sent to Claude API with four sandboxed tools:
+  • read_file   — read source files (max 1MB)
+  • write_file  — write changes (max 500KB, 20 writes/run)
+  • list_directory — explore project structure
+  • search_files — glob search for files
+       │
+       ▼
+Claude responds with tool_use → agent executes → sends tool_result
+  (repeats up to 25 turns until Claude sends end_turn)
+       │
+       ▼
+Agent writes .vci/agent-result.json with status + changed files
+       │
+       ▼
+Frontend polls /api/agent-status every 2s
+  → shows "Working..." spinner during run
+  → shows "Work done" toast on success
+  → auto-reloads iframe to display the changes
+```
+
+The prompt formatter uses a multi-pass budget strategy to fit within token limits. It starts with full fidelity (HTML + vision analysis), then progressively strips detail — first HTML, then vision summaries, then images and screenshots, and finally hard-truncates as a last resort. Source file paths, CSS selectors, and user instructions are always preserved since those are what the agent needs to locate and edit code.
+
+All file operations are sandboxed to `VCI_OUTPUT_DIR` via `Path.is_relative_to()` containment checks. The agent cannot write dotfiles (`.env`, `.bashrc`), executable scripts (`.sh`, `.bat`), or files outside the mounted project directory. Port 8001 is internal to the Docker network and not exposed to the host.
+
+**Code locations**: `proxy/agent.py`, `proxy/agent_tools.py`, `proxy/formatter.py`, `frontend/src/components/PayloadPreview.tsx`

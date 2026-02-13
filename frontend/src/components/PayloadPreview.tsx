@@ -33,7 +33,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 export function PayloadPreview() {
-  const { generatePayload, selectedElements, screenshotData, userPrompt, uploadedImages, showToast, reloadIframe } = useInspectorStore()
+  const { generatePayload, selectedElements, screenshotData, userPrompt, uploadedImages, showToast, showPersistentToast, reloadIframe } = useInspectorStore()
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -64,9 +64,7 @@ export function PayloadPreview() {
         }
 
         if (status.status === 'success') {
-          const fileCount = status.filesChanged?.length ?? 0
-          const msg = status.message ?? `Modified ${fileCount} file(s)`
-          showToast(`Agent done: ${msg}`)
+          showToast('Work done')
           reloadIframe()
           return
         }
@@ -97,7 +95,7 @@ export function PayloadPreview() {
     const fileResult = await exportToFile(payload)
 
     if (fileResult.success) {
-      showToast('Context sent to agent...')
+      showPersistentToast('Working...')
       pollAgentStatus()
       return
     }

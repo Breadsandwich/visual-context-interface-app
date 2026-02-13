@@ -12,6 +12,7 @@ interface InspectorState {
   elementPrompts: Record<string, string>
   uploadedImages: UploadedImage[]
   toastMessage: string | null
+  isToastPersistent: boolean
   screenshotData: string | null
   screenshotPrompt: string
   screenshotAnalysis: VisionAnalysis | null
@@ -32,6 +33,7 @@ interface InspectorState {
   removeUploadedImage: (id: string) => void
   clearUploadedImages: () => void
   showToast: (message: string) => void
+  showPersistentToast: (message: string) => void
   dismissToast: () => void
   setScreenshotData: (data: string | null) => void
   setScreenshotPrompt: (prompt: string) => void
@@ -60,6 +62,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   elementPrompts: {},
   uploadedImages: [],
   toastMessage: null,
+  isToastPersistent: false,
   screenshotData: null,
   screenshotPrompt: '',
   screenshotAnalysis: null,
@@ -169,11 +172,19 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     if (toastTimer) {
       clearTimeout(toastTimer)
     }
-    set({ toastMessage: message })
+    set({ toastMessage: message, isToastPersistent: false })
     toastTimer = setTimeout(() => {
       set({ toastMessage: null })
       toastTimer = null
     }, 3000)
+  },
+
+  showPersistentToast: (message) => {
+    if (toastTimer) {
+      clearTimeout(toastTimer)
+      toastTimer = null
+    }
+    set({ toastMessage: message, isToastPersistent: true })
   },
 
   dismissToast: () => {
@@ -181,7 +192,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
       clearTimeout(toastTimer)
       toastTimer = null
     }
-    set({ toastMessage: null })
+    set({ toastMessage: null, isToastPersistent: false })
   },
 
   setScreenshotData: (data) => set({
@@ -251,6 +262,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     elementPrompts: {},
     uploadedImages: [],
     toastMessage: null,
+    isToastPersistent: false,
     screenshotData: null,
     screenshotPrompt: '',
     screenshotAnalysis: null,

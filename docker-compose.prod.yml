@@ -1,0 +1,41 @@
+services:
+  visual-context-tool:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    ports:
+      - "5173"
+    environment:
+      - TARGET_HOST=dummy-target
+      - TARGET_PORT=3001
+      - VITE_PROXY_URL=http://localhost:8000
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - VCI_OUTPUT_DIR=/output
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-https://vci.example.com}
+      - ALLOWED_ORIGINS=${FRONTEND_ORIGIN:-https://vci.example.com}
+    volumes:
+      - vci-output:/output
+    networks:
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vci-app.rule=Host(`${VCI_DOMAIN}`)"
+      - "traefik.http.routers.vci-app.entrypoints=websecure"
+      - "traefik.http.routers.vci-app.tls.certResolver=letsencrypt"
+      - "traefik.http.services.vci-app.loadbalancer.server.port=5173"
+
+  dummy-target:
+    build:
+      context: ./dummy-target
+      dockerfile: Dockerfile
+    ports:
+      - "3001"
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true
+
+volumes:
+  vci-output:

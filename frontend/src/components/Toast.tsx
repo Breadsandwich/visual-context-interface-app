@@ -29,7 +29,7 @@ export function Toast() {
   if (!toastMessage) return null
 
   const style = widgetWidth
-    ? { minWidth: `${Math.round(widgetWidth * 1.33)}px` }
+    ? { maxWidth: `${Math.round(widgetWidth * 1.33)}px` }
     : undefined
 
   return (

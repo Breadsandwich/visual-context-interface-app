@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { InspectorMode, ElementContext, UploadedImage, ImageCodemap, OutputPayload, VisionAnalysis, AnalysisStatus, ExternalImagePayload } from '../types/inspector'
+import type { InspectorMode, ElementContext, UploadedImage, ImageCodemap, OutputPayload, VisionAnalysis, AnalysisStatus, ExternalImagePayload, ContextEntry } from '../types/inspector'
 
 const MAX_SELECTED_ELEMENTS = 10
 const MAX_UPLOADED_IMAGES = 10
@@ -264,29 +264,45 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   generatePayload: () => {
     const state = get()
 
+    const toImagePayload = (img: UploadedImage): ExternalImagePayload => ({
+      filename: img.codemap?.filename ?? img.filename,
+      dimensions: img.codemap?.dimensions ?? 'unknown',
+      aspectRatio: img.codemap?.aspectRatio ?? 'unknown',
+      fileSize: img.codemap?.fileSize ?? `${img.size} B`,
+      dominantColors: img.codemap?.dominantColors ?? [],
+      brightness: img.codemap?.brightness ?? 'medium',
+      hasTransparency: img.codemap?.hasTransparency ?? false,
+      contentType: img.visionAnalysis?.contentType ?? img.codemap?.contentType,
+      description: img.visionAnalysis?.description ?? img.filename,
+      linkedElementSelector: img.linkedElementSelector,
+      visionAnalysis: img.visionAnalysis,
+    })
+
+    const linkedBySelector = new Map<string, ExternalImagePayload[]>()
+    const unlinkedImages: ExternalImagePayload[] = []
+
+    for (const img of state.uploadedImages) {
+      const payload = toImagePayload(img)
+      if (img.linkedElementSelector) {
+        const existing = linkedBySelector.get(img.linkedElementSelector) ?? []
+        linkedBySelector.set(img.linkedElementSelector, [...existing, payload])
+      } else {
+        unlinkedImages.push(payload)
+      }
+    }
+
     const payload: OutputPayload = {
       route: state.currentRoute,
-      contexts: state.selectedElements.map((el) => ({
+      contexts: state.selectedElements.map((el): ContextEntry => ({
         html: el.outerHTML,
         selector: el.selector,
         tagName: el.tagName,
         id: el.id,
         classes: el.classes,
-        elementPrompt: state.elementPrompts[el.selector] ?? ''
+        elementPrompt: state.elementPrompts[el.selector] ?? '',
+        linkedImages: linkedBySelector.get(el.selector) ?? []
       })),
-      externalImages: state.uploadedImages.map((img): ExternalImagePayload => ({
-        filename: img.codemap?.filename ?? img.filename,
-        dimensions: img.codemap?.dimensions ?? 'unknown',
-        aspectRatio: img.codemap?.aspectRatio ?? 'unknown',
-        fileSize: img.codemap?.fileSize ?? `${img.size} B`,
-        dominantColors: img.codemap?.dominantColors ?? [],
-        brightness: img.codemap?.brightness ?? 'medium',
-        hasTransparency: img.codemap?.hasTransparency ?? false,
-        contentType: img.visionAnalysis?.contentType ?? img.codemap?.contentType,
-        description: img.visionAnalysis?.description ?? img.filename,
-        linkedElementSelector: img.linkedElementSelector,
-        visionAnalysis: img.visionAnalysis,
-      })),
+      externalImages: unlinkedImages,
       visualPrompt: state.screenshotPrompt,
       visualAnalysis: state.screenshotAnalysis,
       prompt: state.userPrompt,

@@ -104,16 +104,19 @@ export interface InspectorCommand {
   }
 }
 
+export interface ContextEntry {
+  html: string
+  selector: string
+  tagName: string
+  id: string
+  classes: string[]
+  elementPrompt: string
+  linkedImages: ExternalImagePayload[]
+}
+
 export interface OutputPayload {
   route: string
-  contexts: Array<{
-    html: string
-    selector: string
-    tagName: string
-    id: string
-    classes: string[]
-    elementPrompt: string
-  }>
+  contexts: ContextEntry[]
   externalImages: ExternalImagePayload[]
   visualPrompt: string
   visualAnalysis: VisionAnalysis | null

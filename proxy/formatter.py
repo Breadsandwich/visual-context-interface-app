@@ -74,10 +74,10 @@ def _format_vision_summary(analysis: Optional[dict]) -> Optional[str]:
         parts.append(analysis["description"])
     color_palette = analysis.get("colorPalette", [])
     if color_palette:
-        parts.append(f"Colors: {', '.join(color_palette)}")
+        parts.append(f"Colors: {', '.join(str(c) for c in color_palette)}")
     ui_elements = analysis.get("uiElements", [])
     if ui_elements:
-        parts.append(f"UI elements: {', '.join(ui_elements)}")
+        parts.append(f"UI elements: {', '.join(str(el) for el in ui_elements)}")
     return "\n  - ".join(parts) if parts else None
 
 

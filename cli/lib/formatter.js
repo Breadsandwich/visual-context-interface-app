@@ -103,10 +103,10 @@ function formatVisionSummary(analysis) {
   const parts = []
   if (analysis.description) parts.push(analysis.description)
   if (analysis.colorPalette && analysis.colorPalette.length > 0) {
-    parts.push(`Colors: ${analysis.colorPalette.join(', ')}`)
+    parts.push(`Colors: ${analysis.colorPalette.map(String).join(', ')}`)
   }
   if (analysis.uiElements && analysis.uiElements.length > 0) {
-    parts.push(`UI elements: ${analysis.uiElements.join(', ')}`)
+    parts.push(`UI elements: ${analysis.uiElements.map(String).join(', ')}`)
   }
   return parts.join('\n  - ')
 }

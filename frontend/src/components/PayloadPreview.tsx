@@ -33,7 +33,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 export function PayloadPreview() {
-  const { generatePayload, selectedElements, screenshotData, userPrompt, uploadedImages, showToast } = useInspectorStore()
+  const { generatePayload, selectedElements, screenshotData, userPrompt, uploadedImages, showToast, reloadIframe } = useInspectorStore()
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -67,6 +67,7 @@ export function PayloadPreview() {
           const fileCount = status.filesChanged?.length ?? 0
           const msg = status.message ?? `Modified ${fileCount} file(s)`
           showToast(`Agent done: ${msg}`)
+          reloadIframe()
           return
         }
 

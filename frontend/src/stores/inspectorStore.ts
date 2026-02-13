@@ -21,6 +21,7 @@ interface InspectorState {
   isInspectorReady: boolean
   isSidebarOpen: boolean
   clearSelectionTrigger: number
+  iframeReloadTrigger: number
 
   setMode: (mode: InspectorMode) => void
   toggleSelectedElement: (element: ElementContext) => void
@@ -47,6 +48,7 @@ interface InspectorState {
   clearScreenshot: () => void
   resetAll: () => void
   generatePayload: () => OutputPayload
+  reloadIframe: () => void
   openSidebar: () => void
   closeSidebar: () => void
   toggleSidebar: () => void
@@ -67,6 +69,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   isInspectorReady: false,
   isSidebarOpen: false,
   clearSelectionTrigger: 0,
+  iframeReloadTrigger: 0,
 
   setMode: (mode) => set({ mode }),
 
@@ -256,6 +259,8 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     isSidebarOpen: false,
     clearSelectionTrigger: state.clearSelectionTrigger + 1
   })),
+
+  reloadIframe: () => set((state) => ({ iframeReloadTrigger: state.iframeReloadTrigger + 1 })),
 
   openSidebar: () => set({ isSidebarOpen: true }),
   closeSidebar: () => set({ isSidebarOpen: false }),

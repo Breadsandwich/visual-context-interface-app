@@ -1,0 +1,19 @@
+{
+  "name": "vci-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server exposing VCI visual context as a tool for Claude Code",
+  "main": "server.js",
+  "bin": {
+    "vci-mcp": "./server.js"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["mcp", "vci", "visual-context"],
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "^4.3.6"
+  }
+}

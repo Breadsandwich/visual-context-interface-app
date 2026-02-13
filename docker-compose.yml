@@ -13,6 +13,7 @@ services:
       - TARGET_PORT=${TARGET_PORT:-3001}
       - VITE_PROXY_URL=http://localhost:8000
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - VCI_OUTPUT_DIR=${VCI_OUTPUT_DIR:-/output}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -20,6 +21,9 @@ services:
       - ./proxy:/app/proxy
       - ./inspector:/app/inspector
       - /app/frontend/node_modules
+      # Mount your project directory for file export:
+      # VCI_PROJECT_DIR=/path/to/your/project docker-compose up
+      - ${VCI_PROJECT_DIR:-.}:/output
     depends_on:
       dummy-target:
         condition: service_started

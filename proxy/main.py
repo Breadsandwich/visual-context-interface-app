@@ -13,6 +13,7 @@ import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, field_validator
 
+from datetime import datetime, timezone
 from injection import inject_inspector_script, rewrite_asset_paths
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ app.add_middleware(
 TARGET_HOST = os.getenv("TARGET_HOST", "localhost")
 TARGET_PORT = os.getenv("TARGET_PORT", "3001")
 INSPECTOR_DIR = (Path(__file__).parent.parent / "inspector").resolve()
+VCI_OUTPUT_DIR = os.getenv("VCI_OUTPUT_DIR", "")
 
 # When True, the proxy strips the /proxy/ prefix before forwarding.
 # The bundled dummy-target serves from /proxy/ so it needs the prefix kept.
@@ -103,6 +105,133 @@ async def analyze_image_endpoint(request_body: AnalyzeImageRequest):
             status_code=500,
             media_type="application/json",
         )
+
+
+class ExportContextRequest(BaseModel):
+    payload: dict = Field(..., description="The VCI context payload to export")
+
+    @field_validator("payload")
+    @classmethod
+    def validate_payload(cls, v: dict) -> dict:
+        if not isinstance(v, dict):
+            raise ValueError("Payload must be a JSON object")
+        serialized = json_module.dumps(v)
+        if len(serialized) > 5 * 1024 * 1024:
+            raise ValueError("Payload too large (max 5MB)")
+        return v
+
+
+@app.post("/api/export-context")
+async def export_context(request_body: ExportContextRequest):
+    """Export VCI context payload to .vci/context.json on disk."""
+    if not VCI_OUTPUT_DIR:
+        return Response(
+            content=json_module.dumps({
+                "success": False,
+                "error": "VCI_OUTPUT_DIR not configured. Set it to your project directory.",
+            }),
+            status_code=503,
+            media_type="application/json",
+        )
+
+    try:
+        # Resolve with strict=True to ensure directory exists and follow symlinks
+        try:
+            output_base = Path(VCI_OUTPUT_DIR).resolve(strict=True)
+        except (FileNotFoundError, RuntimeError, OSError):
+            return Response(
+                content=json_module.dumps({
+                    "success": False,
+                    "error": f"VCI_OUTPUT_DIR does not exist: {VCI_OUTPUT_DIR}",
+                }),
+                status_code=503,
+                media_type="application/json",
+            )
+
+        if not output_base.is_dir():
+            return Response(
+                content=json_module.dumps({
+                    "success": False,
+                    "error": "VCI_OUTPUT_DIR must be a directory",
+                }),
+                status_code=503,
+                media_type="application/json",
+            )
+
+        vci_dir = output_base / ".vci"
+        history_dir = vci_dir / "history"
+
+        # Validate paths stay within output_base before any filesystem writes
+        output_base_str = str(output_base)
+        if not str((output_base / ".vci").resolve()).startswith(output_base_str):
+            logger.warning("Path traversal attempt in export-context")
+            return Response(content="Forbidden", status_code=403)
+
+        vci_dir.mkdir(exist_ok=True)
+        history_dir.mkdir(exist_ok=True)
+
+        payload_json = json_module.dumps(request_body.payload, indent=2)
+
+        # Write latest context
+        context_path = vci_dir / "context.json"
+        context_path.write_text(payload_json, encoding="utf-8")
+
+        # Write timestamped history copy
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+        history_path = history_dir / f"{timestamp}.json"
+        history_path.write_text(payload_json, encoding="utf-8")
+
+        # Fire-and-forget trigger to agent service
+        try:
+            async with httpx.AsyncClient() as http:
+                await http.post(
+                    "http://localhost:8001/agent/run",
+                    json={"context_path": str(context_path)},
+                    timeout=2.0,
+                )
+        except Exception:
+            logger.warning("Agent trigger failed (agent may not be running)")
+
+        return {
+            "success": True,
+            "path": str(context_path),
+            "historyPath": str(history_path),
+        }
+
+    except PermissionError:
+        logger.error(f"Permission denied writing to {VCI_OUTPUT_DIR}")
+        return Response(
+            content=json_module.dumps({
+                "success": False,
+                "error": "Permission denied writing to output directory",
+            }),
+            status_code=403,
+            media_type="application/json",
+        )
+    except Exception:
+        logger.exception("Export context failed")
+        return Response(
+            content=json_module.dumps({"success": False, "error": "Export failed"}),
+            status_code=500,
+            media_type="application/json",
+        )
+
+
+@app.get("/api/agent-status")
+async def agent_status():
+    """Proxy agent status from internal agent service (sanitized)."""
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.get("http://localhost:8001/agent/status", timeout=2.0)
+            data = resp.json()
+            return {
+                "status": data.get("status", "unknown"),
+                "filesChanged": data.get("filesChanged", []),
+                "message": data.get("message"),
+                "turns": data.get("turns", 0),
+            }
+    except Exception:
+        return {"status": "unavailable"}
 
 
 @app.get("/inspector/{filename:path}")

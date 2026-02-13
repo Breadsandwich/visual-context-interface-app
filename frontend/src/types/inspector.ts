@@ -11,6 +11,9 @@ export interface ElementContext {
   selector: string
   outerHTML: string
   boundingRect: DOMRect
+  sourceFile: string | null
+  sourceLine: number | null
+  componentName: string | null
 }
 
 export type ContentType = 'screenshot' | 'photo' | 'illustration' | 'icon' | 'chart' | 'text-heavy' | 'mixed'
@@ -111,6 +114,9 @@ export interface ContextEntry {
   id: string
   classes: string[]
   elementPrompt: string
+  sourceFile: string | null
+  sourceLine: number | null
+  componentName: string | null
   linkedImages: ExternalImagePayload[]
 }
 

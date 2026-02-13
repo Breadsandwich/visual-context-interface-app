@@ -300,6 +300,9 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         id: el.id,
         classes: el.classes,
         elementPrompt: state.elementPrompts[el.selector] ?? '',
+        sourceFile: el.sourceFile ?? null,
+        sourceLine: el.sourceLine ?? null,
+        componentName: el.componentName ?? null,
         linkedImages: linkedBySelector.get(el.selector) ?? []
       })),
       externalImages: unlinkedImages,

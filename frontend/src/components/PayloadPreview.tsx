@@ -1,20 +1,113 @@
+import { useRef, useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
-import { formatPayloadForClipboard, copyToClipboard } from '../utils/payloadBuilder'
+import { formatPayloadForClipboard, copyToClipboard, exportToFile } from '../utils/payloadBuilder'
 import './PayloadPreview.css'
+
+const AGENT_POLL_INTERVAL = 2000
+const AGENT_POLL_MAX_ATTEMPTS = 150 // 5 minutes max
+
+interface AgentStatusResponse {
+  status: 'idle' | 'running' | 'success' | 'error' | 'unavailable'
+  filesChanged?: string[]
+  message?: string | null
+  error?: string | null
+}
+
+async function fetchAgentStatus(): Promise<AgentStatusResponse> {
+  try {
+    const resp = await fetch('/api/agent-status')
+    return await resp.json()
+  } catch {
+    return { status: 'unavailable' }
+  }
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }, { once: true })
+  })
+}
 
 export function PayloadPreview() {
   const { generatePayload, selectedElements, screenshotData, userPrompt, uploadedImages, showToast } = useInspectorStore()
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+    }
+  }, [])
 
   const hasContent = selectedElements.length > 0 || screenshotData || userPrompt || uploadedImages.length > 0
 
+  const pollAgentStatus = async () => {
+    if (abortRef.current && !abortRef.current.signal.aborted) return
+
+    const controller = new AbortController()
+    abortRef.current = controller
+    const { signal } = controller
+
+    try {
+      for (let attempt = 0; attempt < AGENT_POLL_MAX_ATTEMPTS; attempt++) {
+        await delay(AGENT_POLL_INTERVAL, signal)
+
+        const status = await fetchAgentStatus()
+
+        if (signal.aborted) return
+
+        if (status.status === 'unavailable') {
+          return
+        }
+
+        if (status.status === 'success') {
+          const fileCount = status.filesChanged?.length ?? 0
+          const msg = status.message ?? `Modified ${fileCount} file(s)`
+          showToast(`Agent done: ${msg}`)
+          return
+        }
+
+        if (status.status === 'error') {
+          showToast(`Agent error: ${status.error ?? 'Unknown error'}`)
+          return
+        }
+
+        if (status.status !== 'running') {
+          return
+        }
+      }
+
+      showToast('Agent is still running — check back later')
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      throw err
+    } finally {
+      abortRef.current = null
+    }
+  }
+
   const handleSendToAdom = async () => {
     const payload = generatePayload()
+
+    // Try file export first, fall back to clipboard
+    const fileResult = await exportToFile(payload)
+
+    if (fileResult.success) {
+      showToast('Context sent to agent...')
+      pollAgentStatus()
+      return
+    }
+
+    // Fallback: copy to clipboard
     const jsonPayload = formatPayloadForClipboard(payload)
-    const success = await copyToClipboard(jsonPayload)
-    if (success) {
-      showToast('Clipboard exported to ADOM')
+    const clipboardSuccess = await copyToClipboard(jsonPayload)
+    if (clipboardSuccess) {
+      showToast('Copied to clipboard (file export unavailable)')
     } else {
-      showToast('Failed to copy to clipboard')
+      showToast('Export failed — check VCI_OUTPUT_DIR configuration')
     }
   }
 

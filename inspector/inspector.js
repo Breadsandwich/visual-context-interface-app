@@ -548,7 +548,7 @@
    * Handle mouse move in inspection mode
    */
   function handleMouseMove(event) {
-    if (state.mode !== 'inspection') return;
+    if (state.mode !== 'inspection' && state.mode !== 'edit') return;
 
     // Ignore our own elements
     if (event.target.id?.startsWith('__inspector_')) return;
@@ -566,15 +566,25 @@
     if (event.target.id?.startsWith('__inspector_')) return;
 
     if (state.mode === 'edit') {
+      event.preventDefault();
+      event.stopPropagation();
       var target = event.target;
       var selectedMatch = state.selectedElements.find(function(item) {
         return item.element === target || target.closest(item.context.selector);
       });
       if (selectedMatch) {
-        event.preventDefault();
-        event.stopPropagation();
         sendToParent('EDIT_ELEMENT_CLICKED', { selector: selectedMatch.context.selector });
+      } else {
+        // Select the element first, then open editor
+        var editContext = getElementContext(target);
+        if (state.selectedElements.length < MAX_SELECTED_ELEMENTS) {
+          state.selectedElements = state.selectedElements.concat([{ element: target, context: editContext }]);
+          updateSelectionIndicators();
+          sendToParent('ELEMENT_SELECTED', { element: editContext });
+          sendToParent('EDIT_ELEMENT_CLICKED', { selector: editContext.selector });
+        }
       }
+      hideOverlay();
       return;
     }
 
@@ -621,7 +631,7 @@
       case 'SET_MODE':
         if (payload && typeof payload.mode === 'string') {
           state.mode = payload.mode;
-          if (state.mode !== 'inspection') {
+          if (state.mode !== 'inspection' && state.mode !== 'edit') {
             hideOverlay();
           }
           // Set cursor based on active mode

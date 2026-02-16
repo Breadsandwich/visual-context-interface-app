@@ -4,10 +4,19 @@ import { SelectionPreview } from './SelectionPreview'
 import { ImageUpload } from './ImageUpload'
 import { InstructionInput } from './InstructionInput'
 import { PayloadPreview } from './PayloadPreview'
+import { EditorPanel } from './EditorPanel'
 import './ExpandableSidebar.css'
 
-export function ExpandableSidebar() {
-  const { isSidebarOpen, closeSidebar } = useInspectorStore()
+interface ExpandableSidebarProps {
+  applyEdit: (selector: string, property: string, value: string) => void
+  revertEdits: () => void
+  revertElement: (selector: string) => void
+  getComputedStyles: (selector: string) => void
+}
+
+export function ExpandableSidebar({ applyEdit, revertEdits, revertElement, getComputedStyles }: ExpandableSidebarProps) {
+  const { isSidebarOpen, closeSidebar, mode } = useInspectorStore()
+  const isEditMode = mode === 'edit'
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -23,11 +32,11 @@ export function ExpandableSidebar() {
     <aside
       className={`expandable-sidebar ${isSidebarOpen ? 'open' : ''}`}
       role="complementary"
-      aria-label="Context Panel"
+      aria-label={isEditMode ? 'Editor Panel' : 'Context Panel'}
       aria-hidden={!isSidebarOpen}
     >
       <div className="sidebar-header">
-        <h2>Context Panel</h2>
+        <h2>{isEditMode ? 'Editor' : 'Context Panel'}</h2>
         <button
           className="sidebar-close"
           onClick={closeSidebar}
@@ -42,25 +51,36 @@ export function ExpandableSidebar() {
       </div>
 
       <div className="sidebar-content">
-        <div className="sidebar-section">
-          <h3>Selection</h3>
-          <SelectionPreview />
-        </div>
+        {isEditMode ? (
+          <EditorPanel
+            applyEdit={applyEdit}
+            revertEdits={revertEdits}
+            revertElement={revertElement}
+            getComputedStyles={getComputedStyles}
+          />
+        ) : (
+          <>
+            <div className="sidebar-section">
+              <h3>Selection</h3>
+              <SelectionPreview />
+            </div>
 
-        <div className="sidebar-section">
-          <h3>Reference Images</h3>
-          <ImageUpload />
-        </div>
+            <div className="sidebar-section">
+              <h3>Reference Images</h3>
+              <ImageUpload />
+            </div>
 
-        <div className="sidebar-section">
-          <h3>Instructions</h3>
-          <InstructionInput />
-        </div>
+            <div className="sidebar-section">
+              <h3>Instructions</h3>
+              <InstructionInput />
+            </div>
 
-        <div className="sidebar-section">
-          <h3>Export</h3>
-          <PayloadPreview />
-        </div>
+            <div className="sidebar-section">
+              <h3>Export</h3>
+              <PayloadPreview />
+            </div>
+          </>
+        )}
       </div>
     </aside>
   )

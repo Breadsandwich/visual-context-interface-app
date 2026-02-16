@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
 import { usePostMessage } from '../hooks/usePostMessage'
 import { useAreaSelection } from '../hooks/useAreaSelection'
+import { InspectorOverlay } from './InspectorOverlay'
 import './Viewport.css'
 
 const proxyUrl = import.meta.env.VITE_PROXY_URL || ''
@@ -10,7 +11,7 @@ export function Viewport() {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const { mode } = useInspectorStore()
   const iframeReloadTrigger = useInspectorStore((s) => s.iframeReloadTrigger)
-  const { captureScreenshot } = usePostMessage(iframeRef)
+  const { captureScreenshot, applyEdit, revertEdits, revertElement, getComputedStyles } = usePostMessage(iframeRef)
 
   useEffect(() => {
     if (iframeReloadTrigger > 0 && iframeRef.current) {
@@ -56,6 +57,12 @@ export function Viewport() {
           </div>
         )}
       </div>
+      <InspectorOverlay
+        applyEdit={applyEdit}
+        revertEdits={revertEdits}
+        revertElement={revertElement}
+        getComputedStyles={getComputedStyles}
+      />
     </div>
   )
 }

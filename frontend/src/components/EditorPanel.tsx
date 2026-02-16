@@ -84,10 +84,6 @@ export function EditorPanel({
     revertEdits()
   }, [revertEdits])
 
-  const handleBack = useCallback(() => {
-    useEditorStore.getState().setActiveElement(null)
-  }, [])
-
   const handleApply = useCallback(async () => {
     const editsForApply = useEditorStore.getState().getEditsForApply()
     if (editsForApply.length === 0) return
@@ -145,15 +141,13 @@ export function EditorPanel({
   return (
     <div className="editor-panel">
       <div className="editor-panel-header">
-        <button className="editor-back-button" onClick={handleBack}>
-          &#8249; Back to Selection
-        </button>
         <span className="editor-element-badge">{activeElement}</span>
       </div>
 
       <div className="editor-panel-content">
         <ContentEditor
           value={getVal('textContent')}
+          childContents={styles['childContents'] ?? ''}
           onChange={(value) => handlePropertyChange('textContent', value)}
         />
 

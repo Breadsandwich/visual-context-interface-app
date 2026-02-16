@@ -1,4 +1,5 @@
 import { useInspectorStore } from '../stores/inspectorStore'
+import { useEditorStore } from '../stores/editorStore'
 import './FloatingWidget.css'
 
 export function FloatingWidget() {
@@ -13,7 +14,8 @@ export function FloatingWidget() {
     userPrompt,
     isInspectorReady,
     currentRoute,
-    resetAll
+    resetAll,
+    openSidebar
   } = useInspectorStore()
 
   const hasContent = selectedElements.length > 0 || screenshotData !== null || userPrompt !== '' || uploadedImages.length > 0
@@ -86,7 +88,13 @@ export function FloatingWidget() {
 
         <button
           className={`widget-button ${mode === 'edit' ? 'active' : ''}`}
-          onClick={() => setMode('edit')}
+          onClick={() => {
+            setMode('edit')
+            openSidebar()
+            if (selectedElements.length > 0) {
+              useEditorStore.getState().setActiveElement(selectedElements[0].selector)
+            }
+          }}
           title="Edit Element"
           aria-label="Edit element mode"
           aria-pressed={mode === 'edit'}

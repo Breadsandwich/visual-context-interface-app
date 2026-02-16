@@ -37,12 +37,39 @@
 .sidebar-header {
     position: relative;
     z-index: 2;
-    display: flex;
+    display: grid;
+    grid-template-columns: 32px 1fr 32px;
     align-items: center;
-    justify-content: space-between;
     padding: 1rem;
     border-bottom: 1px solid var(--adom-border, #e5e7eb);
     border-top: 3px solid var(--adom-accent, #7b2ff7);
+}
+
+.sidebar-header h2 {
+    text-align: center;
+}
+
+.sidebar-header-spacer {
+    width: 32px;
+}
+
+.sidebar-back {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--adom-text-muted, #9ca3af);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.sidebar-back:hover {
+    background: var(--adom-bg-active, #eef0fa);
+    color: var(--adom-text, #1e2a3a);
 }
 
 .sidebar-header h2 {

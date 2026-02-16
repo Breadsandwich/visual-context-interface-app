@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from datetime import datetime, timezone
 from injection import inject_inspector_script, rewrite_asset_paths
-from source_editor import partition_edits, apply_inline_style_edit
+from source_editor import partition_edits, apply_inline_style_edit, apply_css_class_edit
 
 logger = logging.getLogger(__name__)
 
@@ -278,10 +278,11 @@ async def apply_edits_endpoint(request_body: ApplyEditsRequest):
     deterministic, ai_assisted = partition_edits(request_body.edits)
 
     applied = []
-    failed = []
+    failed_edits = []
     for edit in deterministic:
         source_file = edit.get("sourceFile")
         source_line = edit.get("sourceLine")
+        unapplied_changes = []
         for change in edit.get("changes", []):
             success = apply_inline_style_edit(
                 project_dir,
@@ -290,20 +291,32 @@ async def apply_edits_endpoint(request_body: ApplyEditsRequest):
                 change["property"],
                 change["value"],
             )
-            entry = {
-                "selector": edit["selector"],
-                "property": change["property"],
-                "value": change["value"],
-            }
+            if not success and source_file:
+                # Fallback: try CSS class-based edit
+                success = apply_css_class_edit(
+                    project_dir,
+                    source_file,
+                    edit["selector"],
+                    change["property"],
+                    change["value"],
+                )
             if success:
-                applied.append(entry)
+                applied.append({
+                    "selector": edit["selector"],
+                    "property": change["property"],
+                    "value": change["value"],
+                })
             else:
-                failed.append(entry)
+                unapplied_changes.append(change)
+
+        # Route unapplied deterministic edits to AI instead of marking as failed
+        if unapplied_changes:
+            ai_assisted.append({**edit, "changes": unapplied_changes})
 
     return {
         "success": True,
         "applied": applied,
-        "failed": failed,
+        "failed": failed_edits,
         "aiAssisted": ai_assisted,
     }
 

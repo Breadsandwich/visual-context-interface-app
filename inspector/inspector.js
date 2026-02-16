@@ -725,6 +725,17 @@
         var styleEl = document.querySelector(payload.selector);
         if (!styleEl) break;
         var computed = window.getComputedStyle(styleEl);
+        var childContents = [];
+        var directChildren = styleEl.children;
+        if (directChildren.length > 0) {
+          for (var ci = 0; ci < directChildren.length; ci++) {
+            var child = directChildren[ci];
+            var childText = child.textContent ? child.textContent.trim() : '';
+            if (childText) {
+              childContents.push({ tag: child.tagName.toLowerCase(), text: childText });
+            }
+          }
+        }
         var styles = {
           color: computed.color,
           backgroundColor: computed.backgroundColor,
@@ -735,6 +746,7 @@
           lineHeight: computed.lineHeight,
           letterSpacing: computed.letterSpacing,
           textContent: styleEl.textContent,
+          childContents: childContents.length > 0 ? JSON.stringify(childContents) : '',
           marginTop: computed.marginTop,
           marginRight: computed.marginRight,
           marginBottom: computed.marginBottom,

@@ -79,14 +79,11 @@ describe('EditorPanel', () => {
     expect(screen.getByText('Layout')).toBeInTheDocument()
   })
 
-  it('returns to empty state when Back button is clicked', () => {
+  it('shows element badge in header when element is active', () => {
     useEditorStore.getState().setActiveElement('.btn')
     renderPanel()
 
-    const backButton = screen.getByRole('button', { name: /back to selection/i })
-    fireEvent.click(backButton)
-
-    expect(useEditorStore.getState().activeElement).toBeNull()
+    expect(screen.getByText('.btn')).toBeInTheDocument()
   })
 
   it('shows Apply button disabled when no edits', () => {

@@ -73,6 +73,13 @@ export function EditorPanel({
     [activeElement, styles, applyEdit]
   )
 
+  const handleChildChange = useCallback(
+    (childSelector: string, value: string) => {
+      applyEdit(childSelector, 'textContent', value)
+    },
+    [applyEdit]
+  )
+
   const handleRevertElement = useCallback(() => {
     if (!activeElement) return
     useEditorStore.getState().revertElement(activeElement)
@@ -149,6 +156,7 @@ export function EditorPanel({
           value={getVal('textContent')}
           childContents={styles['childContents'] ?? ''}
           onChange={(value) => handlePropertyChange('textContent', value)}
+          onChildChange={handleChildChange}
         />
 
         <div className="editor-section">

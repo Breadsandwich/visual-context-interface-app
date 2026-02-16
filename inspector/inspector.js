@@ -750,7 +750,11 @@
             var child = directChildren[ci];
             var childText = child.textContent ? child.textContent.trim() : '';
             if (childText) {
-              childContents.push({ tag: child.tagName.toLowerCase(), text: childText });
+              childContents.push({
+                tag: child.tagName.toLowerCase(),
+                text: childText,
+                selector: generateSelector(child)
+              });
             }
           }
         }

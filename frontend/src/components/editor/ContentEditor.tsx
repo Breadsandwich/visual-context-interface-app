@@ -3,15 +3,17 @@ import { useState, useEffect, useMemo } from 'react'
 interface ChildContent {
   tag: string
   text: string
+  selector: string
 }
 
 interface ContentEditorProps {
   value: string
   childContents: string
   onChange: (value: string) => void
+  onChildChange: (selector: string, value: string) => void
 }
 
-export function ContentEditor({ value, childContents, onChange }: ContentEditorProps) {
+export function ContentEditor({ value, childContents, onChange, onChildChange }: ContentEditorProps) {
   const [localValue, setLocalValue] = useState(value)
 
   useEffect(() => {
@@ -39,10 +41,11 @@ export function ContentEditor({ value, childContents, onChange }: ContentEditorP
       {parsedChildren.length > 1 ? (
         <div className="editor-child-contents">
           {parsedChildren.map((child, i) => (
-            <div key={i} className="editor-child-content-item">
-              <span className="editor-child-tag">&lt;{child.tag}&gt;</span>
-              <div className="editor-child-text">{child.text}</div>
-            </div>
+            <ChildContentItem
+              key={child.selector || i}
+              child={child}
+              onChildChange={onChildChange}
+            />
           ))}
         </div>
       ) : (
@@ -54,6 +57,39 @@ export function ContentEditor({ value, childContents, onChange }: ContentEditorP
           placeholder="Element text content..."
         />
       )}
+    </div>
+  )
+}
+
+function ChildContentItem({
+  child,
+  onChildChange,
+}: {
+  child: ChildContent
+  onChildChange: (selector: string, value: string) => void
+}) {
+  const [localText, setLocalText] = useState(child.text)
+
+  useEffect(() => {
+    setLocalText(child.text)
+  }, [child.text])
+
+  const handleBlur = () => {
+    if (localText !== child.text) {
+      onChildChange(child.selector, localText)
+    }
+  }
+
+  return (
+    <div className="editor-child-content-item">
+      <span className="editor-child-tag">&lt;{child.tag}&gt;</span>
+      <textarea
+        className="editor-child-textarea"
+        value={localText}
+        onChange={(e) => setLocalText(e.target.value)}
+        onBlur={handleBlur}
+        rows={2}
+      />
     </div>
   )
 }

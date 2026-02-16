@@ -42,7 +42,10 @@ export function ExpandableSidebar({ applyEdit, revertEdits, revertElement, getCo
         {showBackArrow ? (
           <button
             className="sidebar-back"
-            onClick={() => useEditorStore.getState().setActiveElement(null)}
+            onClick={() => {
+              useEditorStore.getState().setActiveElement(null)
+              useInspectorStore.getState().setMode('inspection')
+            }}
             title="Back to selection"
             aria-label="Back to selection"
           >

@@ -270,16 +270,17 @@ The HTML `rewrite_asset_paths` function only rewrites `href`/`src` attributes in
 
 **Problem**: Uploaded external images (especially PNG screenshots) produced base64 data URIs too large for Claude Code's context window, preventing the AI from working with the generated prompt.
 
-**Solution**: Replace raw image data with lightweight "image codemaps" — structured metadata generated entirely client-side via canvas pixel analysis.
+**First attempt — client-side image codemaps**: Replace raw image data with lightweight structured metadata generated entirely in the browser via canvas pixel analysis. A Sobel edge detector extracted edge maps, dominant colors were clustered from sampled pixels, and a decision tree classified content type (screenshot, photo, icon, etc.). The resulting codemap gave the LLM semantic understanding of the image without seeing pixels — dimensions, colors, complexity, text prominence, and layout.
 
-- A Sobel edge detector extracts horizontal/vertical edge maps from a downscaled canvas (max 300px)
-- Dominant colors are clustered using greedy nearest-neighbor grouping on sampled pixels
-- Text regions are detected by scanning for strips where horizontal edge energy significantly exceeds vertical edge energy, then merged and filtered by aspect ratio
-- Font scale and weight are estimated from text region height ratios and stroke thickness sampling
-- A decision tree classifies content type (screenshot, photo, illustration, icon, chart, text-heavy) using edge sharpness, color count, complexity, transparency, and geometric patterns
-- The resulting codemap includes dimensions, aspect ratio, dominant colors, brightness, transparency, complexity, visual weight distribution, text prominence, font hints, and content type — giving the LLM semantic understanding of the image without seeing pixels
+This worked for simple cases but had a fundamental limitation: the codemap was a lossy abstraction that couldn't capture what a designer actually cares about. A button's hover state, the spacing between elements, a gradient direction — these visual details were lost in the edge-detection pipeline. The LLM was working from a description of an image rather than the image itself.
 
-**Code location**: `frontend/src/utils/imageAnalyzer.ts`
+**Pivot — Claude Vision API**: Instead of trying to compress images into text metadata, send the actual image to Claude's vision model and let it describe what it sees. The proxy forwards base64 image data to Claude Haiku's vision endpoint, which returns structured JSON: a natural-language description, identified UI elements, transcribed text, dominant colors, layout observations, and accessibility notes.
+
+The key difference is that vision analysis captures semantic meaning that pixel analysis cannot. "A primary call-to-action button with low contrast against its background" is more useful to an agent than "dominant color: #4361EE, edge complexity: 0.72, text prominence: high." The vision response also adapts to context — it describes UI screenshots differently from design mockups or icons.
+
+Both the drag-to-select screenshot and uploaded reference images go through the vision pipeline. Results are included in the formatted prompt sent to the agent, so it understands the visual intent behind the user's instructions.
+
+**Code locations**: `proxy/vision.py`, `frontend/src/utils/imageAnalyzer.ts` (original codemap, still used as fallback)
 
 ### From Copy-Paste JSON to Automated Agent
 

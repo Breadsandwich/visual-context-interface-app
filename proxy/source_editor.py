@@ -71,6 +71,42 @@ def camel_to_kebab(name: str) -> str:
     return re.sub(r"([A-Z])", r"-\1", name).lower()
 
 
+def _is_safe_path(project_dir: Path, file_path: Path) -> bool:
+    """Check that resolved path stays within the project directory."""
+    try:
+        resolved = file_path.resolve()
+        return str(resolved).startswith(str(project_dir.resolve()))
+    except (ValueError, OSError):
+        return False
+
+
+def find_css_file(project_dir: Path, source_file: str) -> Path | None:
+    """Find CSS file associated with a JSX/TSX/JS/TS source file.
+
+    Tries common naming conventions: Home.jsx -> Home.css, Home.module.css, etc.
+    """
+    jsx_path = project_dir / source_file
+    stem = jsx_path.stem
+    parent = jsx_path.parent
+
+    for ext in [".css", ".scss", ".module.css", ".module.scss"]:
+        css_path = parent / f"{stem}{ext}"
+        if css_path.is_file() and _is_safe_path(project_dir, css_path):
+            return css_path
+
+    return None
+
+
+def extract_classes_from_selector(selector: str) -> list[str]:
+    """Extract class names from a DOM selector path.
+
+    '#root > div.app > main.main > section.hero:nth-child(1)' -> ['app', 'main', 'hero']
+    Returns classes in reverse order (most specific first).
+    """
+    classes = re.findall(r"\.([a-zA-Z_][\w-]*)", selector)
+    return list(reversed(classes))
+
+
 def apply_inline_style_edit(
     project_dir: Path,
     source_file: str,
@@ -87,12 +123,7 @@ def apply_inline_style_edit(
     if not file_path.is_file():
         return False
 
-    # Path traversal protection
-    try:
-        resolved = file_path.resolve()
-        if not str(resolved).startswith(str(project_dir.resolve())):
-            return False
-    except (ValueError, OSError):
+    if not _is_safe_path(project_dir, file_path):
         return False
 
     content = file_path.read_text()
@@ -122,44 +153,68 @@ def apply_inline_style_edit(
 
 
 def apply_css_class_edit(
-    project_dir: Path,
-    css_file: str,
-    selector: str,
+    css_file_path: Path,
+    classes: list[str],
     property_name: str,
     new_value: str,
 ) -> bool:
-    """Apply a CSS property change in a CSS/SCSS file."""
-    file_path = project_dir / css_file
-    if not file_path.is_file():
+    """Apply a CSS property change in a CSS file by matching class selectors.
+
+    Tries each class name from the element, looking for a rule that contains
+    the target property. Updates the value if found, or adds the property
+    to the first matching rule block if not.
+    """
+    if not css_file_path.is_file():
         return False
 
-    # Path traversal protection
-    try:
-        resolved = file_path.resolve()
-        if not str(resolved).startswith(str(project_dir.resolve())):
-            return False
-    except (ValueError, OSError):
-        return False
-
-    content = file_path.read_text()
+    content = css_file_path.read_text()
     kebab_prop = camel_to_kebab(property_name)
 
-    escaped_selector = re.escape(selector)
-    block_pattern = re.compile(
-        rf"({escaped_selector}\s*\{{[^}}]*?)({re.escape(kebab_prop)}\s*:\s*)([^;]+)(;[^}}]*\}})",
-        re.DOTALL,
-    )
-
-    match = block_pattern.search(content)
-    if match:
-        new_content = (
-            content[:match.start()]
-            + match.group(1)
-            + f"{kebab_prop}: {new_value}"
-            + match.group(4)
-            + content[match.end():]
+    for class_name in classes:
+        # Match .className { ... kebab-prop: value; ... }
+        update_pattern = re.compile(
+            rf"(\.{re.escape(class_name)}\s*\{{[^}}]*?)"
+            rf"({re.escape(kebab_prop)}\s*:\s*)([^;]+)"
+            rf"(;[^}}]*\}})",
+            re.DOTALL,
         )
-        file_path.write_text(new_content)
-        return True
+        match = update_pattern.search(content)
+        if match:
+            new_content = (
+                content[:match.start()]
+                + match.group(1)
+                + f"{kebab_prop}: {new_value}"
+                + match.group(4)
+                + content[match.end():]
+            )
+            css_file_path.write_text(new_content)
+            return True
+
+        # Property not in the rule — try to add it before the closing brace
+        add_pattern = re.compile(
+            rf"(\.{re.escape(class_name)}\s*\{{[^}}]*?)"
+            rf"(\}})",
+            re.DOTALL,
+        )
+        add_match = add_pattern.search(content)
+        if add_match:
+            block_before = add_match.group(1).rstrip()
+            # Detect indentation from existing content
+            existing_lines = block_before.split("\n")
+            indent = "  "
+            if len(existing_lines) > 1:
+                last_prop_line = existing_lines[-1]
+                leading = re.match(r"^(\s+)", last_prop_line)
+                if leading:
+                    indent = leading.group(1)
+            new_content = (
+                content[:add_match.start()]
+                + block_before + "\n"
+                + f"{indent}{kebab_prop}: {new_value};\n"
+                + add_match.group(2)
+                + content[add_match.end():]
+            )
+            css_file_path.write_text(new_content)
+            return True
 
     return False

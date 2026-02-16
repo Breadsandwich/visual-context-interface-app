@@ -15,7 +15,13 @@ from pydantic import BaseModel, Field, field_validator
 
 from datetime import datetime, timezone
 from injection import inject_inspector_script, rewrite_asset_paths
-from source_editor import partition_edits, apply_inline_style_edit, apply_css_class_edit
+from source_editor import (
+    partition_edits,
+    apply_inline_style_edit,
+    apply_css_class_edit,
+    find_css_file,
+    extract_classes_from_selector,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -292,14 +298,16 @@ async def apply_edits_endpoint(request_body: ApplyEditsRequest):
                 change["value"],
             )
             if not success and source_file:
-                # Fallback: try CSS class-based edit
-                success = apply_css_class_edit(
-                    project_dir,
-                    source_file,
-                    edit["selector"],
-                    change["property"],
-                    change["value"],
-                )
+                # Fallback: find associated CSS file and edit by class name
+                css_path = find_css_file(project_dir, source_file)
+                if css_path:
+                    classes = extract_classes_from_selector(edit["selector"])
+                    success = apply_css_class_edit(
+                        css_path,
+                        classes,
+                        change["property"],
+                        change["value"],
+                    )
             if success:
                 applied.append({
                     "selector": edit["selector"],

@@ -4,6 +4,8 @@ from source_editor import (
     partition_edits,
     apply_inline_style_edit,
     apply_css_class_edit,
+    find_css_file,
+    extract_classes_from_selector,
     camel_to_kebab,
 )
 
@@ -93,6 +95,52 @@ class TestCamelToKebab:
         assert camel_to_kebab("color") == "color"
 
 
+class TestExtractClasses:
+    def test_extracts_classes_from_selector(self):
+        selector = "#root > div.app > main.main > section.hero:nth-child(1)"
+        classes = extract_classes_from_selector(selector)
+        assert "hero" in classes
+        assert "main" in classes
+        assert "app" in classes
+
+    def test_most_specific_first(self):
+        selector = "#root > div.app > section.hero"
+        classes = extract_classes_from_selector(selector)
+        assert classes[0] == "hero"
+
+    def test_no_classes_returns_empty(self):
+        selector = "#root > div > section"
+        classes = extract_classes_from_selector(selector)
+        assert classes == []
+
+
+class TestFindCssFile:
+    def test_finds_css_for_jsx(self, tmp_path):
+        jsx = tmp_path / "src" / "Home.jsx"
+        css = tmp_path / "src" / "Home.css"
+        jsx.parent.mkdir(parents=True)
+        jsx.write_text("")
+        css.write_text("")
+        result = find_css_file(tmp_path, "src/Home.jsx")
+        assert result == css
+
+    def test_finds_scss(self, tmp_path):
+        jsx = tmp_path / "src" / "Home.jsx"
+        scss = tmp_path / "src" / "Home.scss"
+        jsx.parent.mkdir(parents=True)
+        jsx.write_text("")
+        scss.write_text("")
+        result = find_css_file(tmp_path, "src/Home.jsx")
+        assert result == scss
+
+    def test_returns_none_when_no_css(self, tmp_path):
+        jsx = tmp_path / "src" / "Home.jsx"
+        jsx.parent.mkdir(parents=True)
+        jsx.write_text("")
+        result = find_css_file(tmp_path, "src/Home.jsx")
+        assert result is None
+
+
 class TestApplyInlineStyleEdit:
     def test_applies_style_change(self, tmp_path):
         comp = tmp_path / "src" / "Button.tsx"
@@ -138,37 +186,68 @@ class TestApplyInlineStyleEdit:
 
 
 class TestApplyCssClassEdit:
-    def test_applies_css_change(self, tmp_path):
-        css = tmp_path / "styles.css"
+    def test_updates_existing_property(self, tmp_path):
+        css = tmp_path / "Home.css"
         css.write_text(
-            ".btn-primary {\n"
-            "  background-color: #cccccc;\n"
-            "  font-size: 14px;\n"
+            ".hero {\n"
+            "  font-size: 16px;\n"
+            "  color: black;\n"
             "}\n"
         )
-        result = apply_css_class_edit(
-            tmp_path, "styles.css", ".btn-primary", "backgroundColor", "#0066ff"
-        )
+        result = apply_css_class_edit(css, ["hero"], "fontSize", "32px")
         assert result is True
         content = css.read_text()
-        assert "background-color: #0066ff" in content
+        assert "font-size: 32px" in content
 
-    def test_returns_false_for_missing_selector(self, tmp_path):
-        css = tmp_path / "styles.css"
-        css.write_text(".other { color: red; }")
-        result = apply_css_class_edit(
-            tmp_path, "styles.css", ".missing", "color", "blue"
+    def test_adds_missing_property(self, tmp_path):
+        css = tmp_path / "Home.css"
+        css.write_text(
+            ".hero {\n"
+            "  color: black;\n"
+            "}\n"
         )
+        result = apply_css_class_edit(css, ["hero"], "fontSize", "32px")
+        assert result is True
+        content = css.read_text()
+        assert "font-size: 32px;" in content
+        assert "color: black;" in content
+
+    def test_tries_multiple_classes(self, tmp_path):
+        css = tmp_path / "Home.css"
+        css.write_text(
+            ".app {\n"
+            "  display: flex;\n"
+            "}\n"
+            ".hero {\n"
+            "  font-size: 16px;\n"
+            "}\n"
+        )
+        # hero is first (most specific), should match
+        result = apply_css_class_edit(css, ["hero", "app"], "fontSize", "32px")
+        assert result is True
+        content = css.read_text()
+        assert "font-size: 32px" in content
+
+    def test_returns_false_for_no_matching_class(self, tmp_path):
+        css = tmp_path / "Home.css"
+        css.write_text(".other { color: red; }")
+        result = apply_css_class_edit(css, ["missing"], "color", "blue")
         assert result is False
 
     def test_returns_false_for_missing_file(self, tmp_path):
-        result = apply_css_class_edit(
-            tmp_path, "nonexistent.css", ".btn", "color", "blue"
-        )
+        fake_path = tmp_path / "nonexistent.css"
+        result = apply_css_class_edit(fake_path, ["btn"], "color", "blue")
         assert result is False
 
-    def test_rejects_path_traversal(self, tmp_path):
-        result = apply_css_class_edit(
-            tmp_path, "../../../etc/shadow", ".btn", "color", "red"
+    def test_preserves_indentation(self, tmp_path):
+        css = tmp_path / "Home.css"
+        css.write_text(
+            ".hero {\n"
+            "    color: black;\n"
+            "}\n"
         )
-        assert result is False
+        result = apply_css_class_edit(css, ["hero"], "fontSize", "32px")
+        assert result is True
+        content = css.read_text()
+        # Should use 4-space indentation matching the existing rule
+        assert "    font-size: 32px;" in content

@@ -1,7 +1,7 @@
 # Direct Editing Feature Design
 
 **Date:** 2026-02-16
-**Branch:** feat/headless-agent-service (base)
+**Branch:** feat/direct-editing (off main)
 **Status:** Approved
 
 ## Problem
@@ -109,8 +109,8 @@ New postMessage exchange to populate editor controls:
 | `inspector/inspector.js` | Add APPLY_EDIT, REVERT_EDITS, GET_COMPUTED_STYLES handlers; edit mode behavior |
 | `frontend/src/components/ExpandableSidebar.tsx` | Conditionally render EditorPanel vs current content |
 | `frontend/src/components/FloatingWidget.tsx` | Add Edit mode button |
-| `proxy/routes.py` | Add `/api/apply-edits` endpoint |
-| `proxy/formatter.py` | Format precise edit instructions for AI path |
+| `proxy/main.py` | Add `/api/apply-edits` endpoint |
+| `proxy/formatter.py` | Add precise edit instruction formatting for AI path |
 
 ## What Stays the Same
 

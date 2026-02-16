@@ -1,5 +1,6 @@
-import { useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useEditorStore } from '../stores/editorStore'
+import { applyEditsToSource } from '../services/editApi'
 import { useInspectorStore } from '../stores/inspectorStore'
 import { ContentEditor } from './editor/ContentEditor'
 import { ColorPicker } from './editor/ColorPicker'
@@ -31,6 +32,7 @@ export function EditorPanel({
   const styles = activeElement ? (computedStyles[activeElement] ?? {}) : {}
   const sourceInfo = activeElement ? sourceInfoMap[activeElement] : null
   const pendingEditCount = useEditorStore((s) => s.getPendingEditCount())
+  const [isApplying, setIsApplying] = useState(false)
 
   // Populate source info from selected elements
   useEffect(() => {
@@ -85,6 +87,47 @@ export function EditorPanel({
   const handleBack = useCallback(() => {
     useEditorStore.getState().setActiveElement(null)
   }, [])
+
+  const handleApply = useCallback(async () => {
+    const editsForApply = useEditorStore.getState().getEditsForApply()
+    if (editsForApply.length === 0) return
+
+    setIsApplying(true)
+    try {
+      const result = await applyEditsToSource(editsForApply)
+
+      if (result.applied.length > 0) {
+        useInspectorStore.getState().showToast(
+          `Applied ${result.applied.length} change${result.applied.length !== 1 ? 's' : ''} directly`
+        )
+      }
+
+      if (result.failed.length > 0) {
+        useInspectorStore.getState().showToast(
+          `${result.failed.length} change${result.failed.length !== 1 ? 's' : ''} could not be applied`
+        )
+      }
+
+      if (result.aiAssisted.length > 0) {
+        useInspectorStore.getState().showToast(
+          `${result.aiAssisted.length} element${result.aiAssisted.length !== 1 ? 's' : ''} sent to agent`
+        )
+      }
+
+      // Clear pending edits and revert live preview
+      useEditorStore.getState().revertAll()
+      revertEdits()
+
+      // Reload iframe to show source changes
+      useInspectorStore.getState().reloadIframe()
+    } catch (error) {
+      useInspectorStore.getState().showToast(
+        `Failed to apply: ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
+    } finally {
+      setIsApplying(false)
+    }
+  }, [revertEdits])
 
   if (!activeElement) {
     return (
@@ -201,10 +244,11 @@ export function EditorPanel({
           </button>
           <button
             className="editor-button editor-button-primary"
-            disabled
+            onClick={handleApply}
+            disabled={pendingEditCount === 0 || isApplying}
           >
-            Apply Changes
-            {pendingEditCount > 0 && (
+            {isApplying ? 'Applying...' : 'Apply Changes'}
+            {!isApplying && pendingEditCount > 0 && (
               <span className="editor-pending-count">{pendingEditCount}</span>
             )}
           </button>

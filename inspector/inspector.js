@@ -638,7 +638,7 @@
           var cursorMap = {
             interaction: 'default',
             inspection: 'crosshair',
-            edit: 'pointer',
+            edit: 'crosshair',
             screenshot: 'crosshair'
           };
           document.body.style.cursor = cursorMap[state.mode] || 'default';

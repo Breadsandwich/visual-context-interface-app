@@ -33,6 +33,8 @@
     routeCheckInterval: null
   };
 
+  const pendingEdits = new Map(); // selector → Map<property, { original, current }>
+
   // Create overlay element for highlighting
   const overlay = document.createElement('div');
   overlay.id = '__inspector_overlay__';
@@ -560,10 +562,23 @@
    * Handle click in inspection mode — toggle element selection
    */
   function handleClick(event) {
-    if (state.mode !== 'inspection') return;
-
     // Ignore our own elements
     if (event.target.id?.startsWith('__inspector_')) return;
+
+    if (state.mode === 'edit') {
+      var target = event.target;
+      var selectedMatch = state.selectedElements.find(function(item) {
+        return item.element === target || target.closest(item.context.selector);
+      });
+      if (selectedMatch) {
+        event.preventDefault();
+        event.stopPropagation();
+        sendToParent('EDIT_ELEMENT_CLICKED', { selector: selectedMatch.context.selector });
+      }
+      return;
+    }
+
+    if (state.mode !== 'inspection') return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -627,6 +642,119 @@
         state.selectedElements = [];
         removeAllSelectionIndicators();
         break;
+
+      case 'APPLY_EDIT': {
+        if (!payload || !payload.selector || !payload.property) break;
+        if (!validateSelector(payload.selector)) break;
+        var el = document.querySelector(payload.selector);
+        if (!el) break;
+
+        // Initialize tracking for this selector if needed
+        if (!pendingEdits.has(payload.selector)) {
+          pendingEdits.set(payload.selector, new Map());
+        }
+        var propMap = pendingEdits.get(payload.selector);
+
+        // Store original value on first edit of this property
+        if (!propMap.has(payload.property)) {
+          var originalValue = payload.property === 'textContent'
+            ? el.textContent
+            : el.style[payload.property];
+          propMap.set(payload.property, { original: originalValue, current: payload.value });
+        } else {
+          var entry = propMap.get(payload.property);
+          propMap.set(payload.property, { original: entry.original, current: payload.value });
+        }
+
+        // Apply the edit
+        if (payload.property === 'textContent') {
+          el.textContent = payload.value;
+        } else {
+          el.style[payload.property] = payload.value;
+        }
+
+        sendToParent('EDIT_APPLIED', {
+          selector: payload.selector,
+          property: payload.property,
+          value: payload.value
+        });
+        break;
+      }
+
+      case 'REVERT_EDITS': {
+        pendingEdits.forEach(function(propMap, selector) {
+          if (!validateSelector(selector)) return;
+          var el = document.querySelector(selector);
+          if (!el) return;
+          propMap.forEach(function(record, property) {
+            if (property === 'textContent') {
+              el.textContent = record.original;
+            } else {
+              el.style[property] = record.original || '';
+            }
+          });
+        });
+        pendingEdits.clear();
+        sendToParent('EDITS_REVERTED', { all: true });
+        break;
+      }
+
+      case 'REVERT_ELEMENT': {
+        if (!payload || !payload.selector) break;
+        var elementPropMap = pendingEdits.get(payload.selector);
+        if (!elementPropMap) break;
+        if (!validateSelector(payload.selector)) break;
+        var revertEl = document.querySelector(payload.selector);
+        if (revertEl) {
+          elementPropMap.forEach(function(record, property) {
+            if (property === 'textContent') {
+              revertEl.textContent = record.original;
+            } else {
+              revertEl.style[property] = record.original || '';
+            }
+          });
+        }
+        pendingEdits.delete(payload.selector);
+        sendToParent('EDITS_REVERTED', { selector: payload.selector });
+        break;
+      }
+
+      case 'GET_COMPUTED_STYLES': {
+        if (!payload || !payload.selector) break;
+        if (!validateSelector(payload.selector)) break;
+        var styleEl = document.querySelector(payload.selector);
+        if (!styleEl) break;
+        var computed = window.getComputedStyle(styleEl);
+        var styles = {
+          color: computed.color,
+          backgroundColor: computed.backgroundColor,
+          borderColor: computed.borderColor,
+          fontFamily: computed.fontFamily,
+          fontSize: computed.fontSize,
+          fontWeight: computed.fontWeight,
+          lineHeight: computed.lineHeight,
+          letterSpacing: computed.letterSpacing,
+          textContent: styleEl.textContent,
+          marginTop: computed.marginTop,
+          marginRight: computed.marginRight,
+          marginBottom: computed.marginBottom,
+          marginLeft: computed.marginLeft,
+          paddingTop: computed.paddingTop,
+          paddingRight: computed.paddingRight,
+          paddingBottom: computed.paddingBottom,
+          paddingLeft: computed.paddingLeft,
+          display: computed.display,
+          width: computed.width,
+          height: computed.height,
+          flexDirection: computed.flexDirection,
+          alignItems: computed.alignItems,
+          justifyContent: computed.justifyContent,
+          gap: computed.gap,
+          opacity: computed.opacity
+        };
+        sendToParent('COMPUTED_STYLES', { selector: payload.selector, styles: styles });
+        break;
+      }
 
       case 'GET_ROUTE':
         sendToParent('ROUTE_CHANGED', {

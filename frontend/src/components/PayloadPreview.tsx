@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
-import { formatPayloadForClipboard, copyToClipboard, exportToFile } from '../utils/payloadBuilder'
+import { exportToFile } from '../utils/payloadBuilder'
 import './PayloadPreview.css'
 
 const AGENT_POLL_INTERVAL = 2000
@@ -91,7 +91,6 @@ export function PayloadPreview() {
   const handleSendToAdom = async () => {
     const payload = generatePayload()
 
-    // Try file export first, fall back to clipboard
     const fileResult = await exportToFile(payload)
 
     if (fileResult.success) {
@@ -100,14 +99,7 @@ export function PayloadPreview() {
       return
     }
 
-    // Fallback: copy to clipboard
-    const jsonPayload = formatPayloadForClipboard(payload)
-    const clipboardSuccess = await copyToClipboard(jsonPayload)
-    if (clipboardSuccess) {
-      showToast('Copied to clipboard (file export unavailable)')
-    } else {
-      showToast('Export failed — check VCI_OUTPUT_DIR configuration')
-    }
+    showToast('File export unavailable')
   }
 
   return (

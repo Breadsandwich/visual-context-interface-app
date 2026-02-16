@@ -624,6 +624,14 @@
           if (state.mode !== 'inspection') {
             hideOverlay();
           }
+          // Set cursor based on active mode
+          var cursorMap = {
+            interaction: 'default',
+            inspection: 'crosshair',
+            edit: 'pointer',
+            screenshot: 'crosshair'
+          };
+          document.body.style.cursor = cursorMap[state.mode] || 'default';
         }
         break;
 

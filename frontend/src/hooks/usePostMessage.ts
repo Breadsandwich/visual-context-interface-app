@@ -104,6 +104,7 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
           if (data.payload && 'selector' in data.payload) {
             const { setActiveElement } = useEditorStore.getState()
             setActiveElement(data.payload.selector as string)
+            useInspectorStore.getState().openSidebar()
           }
           break
       }

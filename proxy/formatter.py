@@ -47,6 +47,24 @@ def _format_source_ref(ctx: dict) -> Optional[str]:
     return f"{source_file}{line}"
 
 
+def _escape_backticks(s: str) -> str:
+    """Escape backticks to prevent breaking markdown inline code."""
+    return str(s).replace("`", "'")
+
+
+def _format_edits(saved_edits: list[dict] | None) -> list[str]:
+    """Format saved edits for an element (mirrors JS formatEdits)."""
+    if not saved_edits:
+        return []
+    lines = ["   - Requested edits:"]
+    for edit in saved_edits:
+        prop = _escape_backticks(edit.get("property", ""))
+        orig = _escape_backticks(edit.get("original", ""))
+        val = _escape_backticks(edit.get("value", ""))
+        lines.append(f"     - `{prop}`: `{orig}` -> `{val}`")
+    return lines
+
+
 def _format_element(ctx: dict, index: int) -> list[str]:
     lines: list[str] = []
     tag = f"<{ctx.get('tagName', 'unknown')}>"
@@ -62,6 +80,8 @@ def _format_element(ctx: dict, index: int) -> list[str]:
 
     if ctx.get("elementPrompt"):
         lines.append(f"   - Instruction: {ctx['elementPrompt']}")
+
+    lines.extend(_format_edits(ctx.get("savedEdits")))
 
     return lines
 
@@ -285,11 +305,11 @@ def format_edit_instructions(ai_edits: list[dict]) -> str:
             if component:
                 location += f" ({component})"
 
-        lines.append(f"## Element: `{selector}`{location}")
+        lines.append(f"## Element: `{_escape_backticks(selector)}`{location}")
         for change in edit.get("changes", []):
-            prop = change.get("property", "")
-            old = change.get("original", "")
-            new = change.get("value", "")
+            prop = _escape_backticks(change.get("property", ""))
+            old = _escape_backticks(change.get("original", ""))
+            new = _escape_backticks(change.get("value", ""))
             lines.append(f"- Change `{prop}` from `{old}` to `{new}`")
         lines.append("")
 

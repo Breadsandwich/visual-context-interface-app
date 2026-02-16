@@ -12,17 +12,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from anthropic import AsyncAnthropic, APIError
-from fastapi import FastAPI
-from pydantic import BaseModel, Field
-
 from agent_tools import TOOL_DEFINITIONS, execute_tool
+from anthropic import APIError, AsyncAnthropic
+from fastapi import FastAPI
 from formatter import (
     DEFAULT_TOKEN_BUDGET,
     format_payload,
     read_context_file,
     validate_payload,
 )
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -47,7 +46,7 @@ Rules:
 - Make minimal, targeted changes — don't refactor surrounding code
 - Preserve existing code style and patterns
 - If you can't find a file or the instruction is ambiguous, explain what you need
-- After making changes, briefly summarize what you did
+-
 
 Security:
 - NEVER modify dotfiles (.env, .bashrc, .gitconfig, etc.) or executable scripts
@@ -109,7 +108,9 @@ async def _run_agent(context_path: str) -> None:
         payload = validate_payload(raw_payload)
         formatted_prompt = format_payload(payload, DEFAULT_TOKEN_BUDGET)
 
-        logger.info("Agent triggered — formatted prompt: %d chars", len(formatted_prompt))
+        logger.info(
+            "Agent triggered — formatted prompt: %d chars", len(formatted_prompt)
+        )
 
         # 2. Initialize async Claude client
         api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -161,7 +162,9 @@ async def _run_agent(context_path: str) -> None:
                 if block.type != "tool_use":
                     continue
 
-                logger.info("Tool call: %s(%s)", block.name, _summarize_input(block.input))
+                logger.info(
+                    "Tool call: %s(%s)", block.name, _summarize_input(block.input)
+                )
 
                 result_text, write_count = execute_tool(
                     block.name, block.input, write_count
@@ -171,11 +174,13 @@ async def _run_agent(context_path: str) -> None:
                 if block.name == "write_file" and not result_text.startswith("Error"):
                     files_changed.add(block.input.get("path", ""))
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": result_text,
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result_text,
+                    }
+                )
 
             if not tool_results:
                 # No tool calls and not end_turn — unexpected, break
@@ -185,7 +190,10 @@ async def _run_agent(context_path: str) -> None:
 
         # 5. Finalize
         turns = _current_run["turns"]
-        message = _current_run.get("message") or f"Completed in {turns} turns, modified {len(files_changed)} file(s)"
+        message = (
+            _current_run.get("message")
+            or f"Completed in {turns} turns, modified {len(files_changed)} file(s)"
+        )
         _current_run = {
             **_current_run,
             "status": "success",
@@ -203,10 +211,18 @@ async def _run_agent(context_path: str) -> None:
         _current_run = {**_current_run, "status": "error", "error": str(exc)}
         logger.error("Agent configuration error: %s", exc)
     except APIError as exc:
-        _current_run = {**_current_run, "status": "error", "error": f"Claude API error: {exc.message}"}
+        _current_run = {
+            **_current_run,
+            "status": "error",
+            "error": f"Claude API error: {exc.message}",
+        }
         logger.error("Claude API error: %s", exc)
     except Exception:
-        _current_run = {**_current_run, "status": "error", "error": "An unexpected error occurred. Check server logs."}
+        _current_run = {
+            **_current_run,
+            "status": "error",
+            "error": "An unexpected error occurred. Check server logs.",
+        }
         logger.exception("Agent failed with unexpected error")
     finally:
         _write_result(output_dir)

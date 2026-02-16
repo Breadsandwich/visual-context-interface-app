@@ -114,6 +114,74 @@
   }
 
   /**
+   * Find the React fiber node for a DOM element.
+   * React attaches fibers via __reactFiber$ (React 17+) or __reactInternalInstance$ (React 16).
+   * Returns null for non-React elements or production builds (no fiber attached).
+   */
+  function getReactFiber(domNode) {
+    if (!domNode || typeof domNode !== 'object') return null;
+    try {
+      var keys = Object.keys(domNode);
+      for (var i = 0; i < keys.length; i++) {
+        if (keys[i].startsWith('__reactFiber$') || keys[i].startsWith('__reactInternalInstance$')) {
+          return domNode[keys[i]];
+        }
+      }
+    } catch (_e) {
+      return null;
+    }
+    return null;
+  }
+
+  /**
+   * Extract source location from a React fiber's _debugSource.
+   * Walks up the fiber tree to find the nearest fiber with debug info.
+   * Returns { sourceFile, sourceLine, componentName } or all-null if unavailable.
+   */
+  function getSourceLocation(domNode) {
+    var result = { sourceFile: null, sourceLine: null, componentName: null };
+    try {
+      var fiber = getReactFiber(domNode);
+      if (!fiber) return result;
+
+      // Walk up the fiber tree looking for _debugSource
+      var current = fiber;
+      var maxDepth = 20;
+      while (current && maxDepth-- > 0) {
+        if (current._debugSource) {
+          result.sourceFile = current._debugSource.fileName || null;
+          result.sourceLine = current._debugSource.lineNumber || null;
+          // columnNumber is sometimes available but not always useful
+          break;
+        }
+        current = current.return;
+      }
+
+      // Walk up again to find the nearest named component
+      current = fiber;
+      maxDepth = 20;
+      while (current && maxDepth-- > 0) {
+        if (typeof current.type === 'function' && current.type.name) {
+          result.componentName = current.type.name;
+          break;
+        }
+        if (typeof current.type === 'object' && current.type !== null) {
+          // ForwardRef, memo, etc. may have displayName
+          var displayName = current.type.displayName || current.type.name;
+          if (displayName) {
+            result.componentName = displayName;
+            break;
+          }
+        }
+        current = current.return;
+      }
+    } catch (_e) {
+      // Graceful fallback — fiber internals may vary across React versions
+    }
+    return result;
+  }
+
+  /**
    * Get element context data
    */
   function getElementContext(element) {
@@ -121,6 +189,8 @@
     const classes = element.className && typeof element.className === 'string'
       ? element.className.trim().split(/\s+/).filter(c => c)
       : [];
+
+    var source = getSourceLocation(element);
 
     return {
       tagName: element.tagName.toLowerCase(),
@@ -137,7 +207,10 @@
         right: rect.right,
         bottom: rect.bottom,
         left: rect.left
-      }
+      },
+      sourceFile: source.sourceFile,
+      sourceLine: source.sourceLine,
+      componentName: source.componentName
     };
   }
 
@@ -632,6 +705,8 @@
     state: state,
     getElementContext: getElementContext,
     generateSelector: generateSelector,
+    getSourceLocation: getSourceLocation,
+    getReactFiber: getReactFiber,
     captureScreenshot: captureScreenshot,
     cleanup: cleanup
   };

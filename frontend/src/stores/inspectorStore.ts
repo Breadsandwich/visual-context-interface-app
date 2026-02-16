@@ -12,6 +12,7 @@ interface InspectorState {
   elementPrompts: Record<string, string>
   uploadedImages: UploadedImage[]
   toastMessage: string | null
+  isToastPersistent: boolean
   screenshotData: string | null
   screenshotPrompt: string
   screenshotAnalysis: VisionAnalysis | null
@@ -21,6 +22,7 @@ interface InspectorState {
   isInspectorReady: boolean
   isSidebarOpen: boolean
   clearSelectionTrigger: number
+  iframeReloadTrigger: number
 
   setMode: (mode: InspectorMode) => void
   toggleSelectedElement: (element: ElementContext) => void
@@ -31,6 +33,7 @@ interface InspectorState {
   removeUploadedImage: (id: string) => void
   clearUploadedImages: () => void
   showToast: (message: string) => void
+  showPersistentToast: (message: string) => void
   dismissToast: () => void
   setScreenshotData: (data: string | null) => void
   setScreenshotPrompt: (prompt: string) => void
@@ -47,6 +50,7 @@ interface InspectorState {
   clearScreenshot: () => void
   resetAll: () => void
   generatePayload: () => OutputPayload
+  reloadIframe: () => void
   openSidebar: () => void
   closeSidebar: () => void
   toggleSidebar: () => void
@@ -58,6 +62,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   elementPrompts: {},
   uploadedImages: [],
   toastMessage: null,
+  isToastPersistent: false,
   screenshotData: null,
   screenshotPrompt: '',
   screenshotAnalysis: null,
@@ -67,6 +72,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   isInspectorReady: false,
   isSidebarOpen: false,
   clearSelectionTrigger: 0,
+  iframeReloadTrigger: 0,
 
   setMode: (mode) => set({ mode }),
 
@@ -166,11 +172,19 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     if (toastTimer) {
       clearTimeout(toastTimer)
     }
-    set({ toastMessage: message })
+    set({ toastMessage: message, isToastPersistent: false })
     toastTimer = setTimeout(() => {
       set({ toastMessage: null })
       toastTimer = null
     }, 3000)
+  },
+
+  showPersistentToast: (message) => {
+    if (toastTimer) {
+      clearTimeout(toastTimer)
+      toastTimer = null
+    }
+    set({ toastMessage: message, isToastPersistent: true })
   },
 
   dismissToast: () => {
@@ -178,7 +192,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
       clearTimeout(toastTimer)
       toastTimer = null
     }
-    set({ toastMessage: null })
+    set({ toastMessage: null, isToastPersistent: false })
   },
 
   setScreenshotData: (data) => set({
@@ -248,6 +262,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     elementPrompts: {},
     uploadedImages: [],
     toastMessage: null,
+    isToastPersistent: false,
     screenshotData: null,
     screenshotPrompt: '',
     screenshotAnalysis: null,
@@ -256,6 +271,8 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     isSidebarOpen: false,
     clearSelectionTrigger: state.clearSelectionTrigger + 1
   })),
+
+  reloadIframe: () => set((state) => ({ iframeReloadTrigger: state.iframeReloadTrigger + 1 })),
 
   openSidebar: () => set({ isSidebarOpen: true }),
   closeSidebar: () => set({ isSidebarOpen: false }),
@@ -300,6 +317,9 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         id: el.id,
         classes: el.classes,
         elementPrompt: state.elementPrompts[el.selector] ?? '',
+        sourceFile: el.sourceFile ?? null,
+        sourceLine: el.sourceLine ?? null,
+        componentName: el.componentName ?? null,
         linkedImages: linkedBySelector.get(el.selector) ?? []
       })),
       externalImages: unlinkedImages,

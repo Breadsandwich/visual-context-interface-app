@@ -37,6 +37,9 @@ coverage/
 # Temp files
 frontend/public/temp-images/
 
+# VCI output
+.vci/
+
 # Misc
 .env.local
 .env.*.local

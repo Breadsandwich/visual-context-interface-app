@@ -26,3 +26,34 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
 }
+
+interface ExportResult {
+  success: boolean
+  path?: string
+  error?: string
+}
+
+export async function exportToFile(payload: OutputPayload): Promise<ExportResult> {
+  try {
+    const response = await fetch('/api/export-context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload }),
+    })
+
+    let result: { success?: boolean; error?: string; path?: string }
+    try {
+      result = await response.json()
+    } catch {
+      return { success: false, error: 'Invalid server response' }
+    }
+
+    if (!response.ok || !result.success) {
+      return { success: false, error: result.error || `HTTP ${response.status}` }
+    }
+
+    return { success: true, path: result.path }
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}

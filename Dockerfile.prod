@@ -1,0 +1,39 @@
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ ./
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY proxy/requirements.txt /app/proxy/
+RUN pip install --no-cache-dir -r /app/proxy/requirements.txt
+
+COPY proxy/ /app/proxy/
+COPY inspector/ /app/inspector/
+COPY --from=frontend-builder /app/frontend /app/frontend
+
+# Bake dummy-target source into image for /output initialization
+COPY dummy-target/ /app/dummy-target-src/
+
+WORKDIR /app/frontend
+RUN npm install
+
+WORKDIR /app
+
+EXPOSE 5173 8000
+
+COPY start.prod.sh /app/start.prod.sh
+RUN chmod +x /app/start.prod.sh
+
+CMD ["/app/start.prod.sh"]

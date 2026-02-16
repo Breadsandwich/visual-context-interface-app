@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
 import { usePostMessage } from '../hooks/usePostMessage'
 import { useAreaSelection } from '../hooks/useAreaSelection'
@@ -9,7 +9,14 @@ const proxyUrl = import.meta.env.VITE_PROXY_URL || ''
 export function Viewport() {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const { mode } = useInspectorStore()
+  const iframeReloadTrigger = useInspectorStore((s) => s.iframeReloadTrigger)
   const { captureScreenshot } = usePostMessage(iframeRef)
+
+  useEffect(() => {
+    if (iframeReloadTrigger > 0 && iframeRef.current) {
+      iframeRef.current.src = iframeRef.current.src
+    }
+  }, [iframeReloadTrigger])
 
   const { containerRef, isSelecting, selectionRect, handleMouseDown } = useAreaSelection({
     enabled: mode === 'screenshot',

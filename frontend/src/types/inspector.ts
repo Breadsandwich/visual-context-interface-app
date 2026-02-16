@@ -120,6 +120,7 @@ export interface ContextEntry {
   sourceLine: number | null
   componentName: string | null
   linkedImages: ExternalImagePayload[]
+  savedEdits: PropertyEdit[]
 }
 
 export interface OutputPayload {

@@ -1,13 +1,21 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useEditorStore } from '../stores/editorStore'
-import { applyEditsToSource } from '../services/editApi'
 import { useInspectorStore } from '../stores/inspectorStore'
 import { ContentEditor } from './editor/ContentEditor'
 import { ColorPicker } from './editor/ColorPicker'
 import { TypographyEditor } from './editor/TypographyEditor'
 import { SpacingEditor } from './editor/SpacingEditor'
 import { LayoutEditor } from './editor/LayoutEditor'
+import type { PropertyEdit } from '../types/inspector'
 import './EditorPanel.css'
+
+function mergeEdits(existing: PropertyEdit[], incoming: PropertyEdit[]): PropertyEdit[] {
+  const byProperty = new Map(existing.map((e) => [e.property, e]))
+  for (const edit of incoming) {
+    byProperty.set(edit.property, { ...edit })
+  }
+  return Array.from(byProperty.values()).filter((e) => e.value !== e.original)
+}
 
 interface EditorPanelProps {
   applyEdit: (selector: string, property: string, value: string) => void
@@ -32,7 +40,6 @@ export function EditorPanel({
   const styles = activeElement ? (computedStyles[activeElement] ?? {}) : {}
   const sourceInfo = activeElement ? sourceInfoMap[activeElement] : null
   const pendingEditCount = useEditorStore((s) => s.getPendingEditCount())
-  const [isApplying, setIsApplying] = useState(false)
 
   // Populate source info from selected elements
   useEffect(() => {
@@ -74,7 +81,34 @@ export function EditorPanel({
   )
 
   const handleChildChange = useCallback(
-    (childSelector: string, value: string) => {
+    (childSelector: string, value: string, original: string, tagName: string) => {
+      // Track edit in pendingEdits (enables Save Changes button)
+      useEditorStore.getState().addEdit(childSelector, {
+        property: 'textContent',
+        value,
+        original,
+      })
+
+      // Auto-add child to selection if not already there
+      const inspectorState = useInspectorStore.getState()
+      const alreadySelected = inspectorState.selectedElements.some(
+        (el) => el.selector === childSelector
+      )
+      if (!alreadySelected) {
+        inspectorState.toggleSelectedElement({
+          tagName,
+          id: '',
+          classes: [],
+          selector: childSelector,
+          outerHTML: `<${tagName}>${original}</${tagName}>`,
+          boundingRect: { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 } as DOMRect,
+          sourceFile: null,
+          sourceLine: null,
+          componentName: null,
+        })
+      }
+
+      // Apply live preview to iframe
       applyEdit(childSelector, 'textContent', value)
     },
     [applyEdit]
@@ -91,46 +125,29 @@ export function EditorPanel({
     revertEdits()
   }, [revertEdits])
 
-  const handleApply = useCallback(async () => {
-    const editsForApply = useEditorStore.getState().getEditsForApply()
-    if (editsForApply.length === 0) return
+  const handleSave = useCallback(() => {
+    const allPending = useEditorStore.getState().pendingEdits
+    const inspectorState = useInspectorStore.getState()
 
-    setIsApplying(true)
-    try {
-      const result = await applyEditsToSource(editsForApply)
-
-      if (result.applied.length > 0) {
-        useInspectorStore.getState().showToast(
-          `Applied ${result.applied.length} change${result.applied.length !== 1 ? 's' : ''} directly`
-        )
-      }
-
-      if (result.failed.length > 0) {
-        useInspectorStore.getState().showToast(
-          `${result.failed.length} change${result.failed.length !== 1 ? 's' : ''} could not be applied`
-        )
-      }
-
-      if (result.aiAssisted.length > 0) {
-        useInspectorStore.getState().showToast(
-          `${result.aiAssisted.length} element${result.aiAssisted.length !== 1 ? 's' : ''} sent to agent`
-        )
-      }
-
-      // Clear pending edits and revert live preview
-      useEditorStore.getState().revertAll()
-      revertEdits()
-
-      // Reload iframe to show source changes
-      useInspectorStore.getState().reloadIframe()
-    } catch (error) {
-      useInspectorStore.getState().showToast(
-        `Failed to apply: ${error instanceof Error ? error.message : 'Unknown error'}`
-      )
-    } finally {
-      setIsApplying(false)
+    let totalSaved = 0
+    for (const [selector, edits] of Object.entries(allPending)) {
+      const existing = inspectorState.elementEdits[selector] ?? []
+      const merged = mergeEdits(existing, edits)
+      inspectorState.setElementEdits(selector, merged)
+      totalSaved += edits.length
     }
-  }, [revertEdits])
+
+    inspectorState.showToast(
+      `Saved ${totalSaved} edit${totalSaved !== 1 ? 's' : ''} to context`
+    )
+
+    // Clear pending edits but keep iframe preview live
+    useEditorStore.getState().revertAll()
+
+    // Navigate back to context panel
+    useEditorStore.getState().setActiveElement(null)
+    inspectorState.setMode('inspection')
+  }, [])
 
   if (!activeElement) {
     return (
@@ -246,11 +263,11 @@ export function EditorPanel({
           </button>
           <button
             className="editor-button editor-button-primary"
-            onClick={handleApply}
-            disabled={pendingEditCount === 0 || isApplying}
+            onClick={handleSave}
+            disabled={pendingEditCount === 0}
           >
-            {isApplying ? 'Applying...' : 'Apply Changes'}
-            {!isApplying && pendingEditCount > 0 && (
+            Save Changes
+            {pendingEditCount > 0 && (
               <span className="editor-pending-count">{pendingEditCount}</span>
             )}
           </button>

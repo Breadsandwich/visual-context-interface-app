@@ -10,7 +10,7 @@ interface ContentEditorProps {
   value: string
   childContents: string
   onChange: (value: string) => void
-  onChildChange: (selector: string, value: string) => void
+  onChildChange: (selector: string, value: string, original: string, tagName: string) => void
 }
 
 export function ContentEditor({ value, childContents, onChange, onChildChange }: ContentEditorProps) {
@@ -66,7 +66,7 @@ function ChildContentItem({
   onChildChange,
 }: {
   child: ChildContent
-  onChildChange: (selector: string, value: string) => void
+  onChildChange: (selector: string, value: string, original: string, tagName: string) => void
 }) {
   const [localText, setLocalText] = useState(child.text)
 
@@ -76,7 +76,7 @@ function ChildContentItem({
 
   const handleBlur = () => {
     if (localText !== child.text) {
-      onChildChange(child.selector, localText)
+      onChildChange(child.selector, localText, child.text, child.tag)
     }
   }
 

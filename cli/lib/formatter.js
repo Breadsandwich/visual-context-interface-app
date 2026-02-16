@@ -77,6 +77,16 @@ function formatSourceRef(ctx) {
   return `${ctx.sourceFile}${line}`
 }
 
+function formatEdits(savedEdits) {
+  if (!savedEdits || savedEdits.length === 0) return []
+  const esc = (s) => String(s).replace(/`/g, "'")
+  const lines = ['   - Requested edits:']
+  for (const edit of savedEdits) {
+    lines.push(`     - \`${esc(edit.property)}\`: \`${esc(edit.original)}\` -> \`${esc(edit.value)}\``)
+  }
+  return lines
+}
+
 function formatElement(ctx, index) {
   const lines = []
   const tag = `<${ctx.tagName}>`
@@ -94,6 +104,8 @@ function formatElement(ctx, index) {
   if (ctx.elementPrompt) {
     lines.push(`   - Instruction: ${ctx.elementPrompt}`)
   }
+
+  lines.push(...formatEdits(ctx.savedEdits))
 
   return lines
 }

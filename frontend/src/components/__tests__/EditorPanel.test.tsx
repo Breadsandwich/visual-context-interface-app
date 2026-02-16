@@ -3,9 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { EditorPanel } from '../EditorPanel'
 import { useEditorStore } from '../../stores/editorStore'
 
-vi.mock('../../services/editApi', () => ({
-  applyEditsToSource: vi.fn(),
-}))
+import { useInspectorStore } from '../../stores/inspectorStore'
 
 const mockApplyEdit = vi.fn()
 const mockRevertEdits = vi.fn()
@@ -27,6 +25,7 @@ describe('EditorPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useEditorStore.getState().resetEditor()
+    useInspectorStore.getState().resetAll()
   })
 
   it('shows empty state when no element is active', () => {
@@ -86,15 +85,15 @@ describe('EditorPanel', () => {
     expect(screen.getByText('.btn')).toBeInTheDocument()
   })
 
-  it('shows Apply button disabled when no edits', () => {
+  it('shows Save button disabled when no edits', () => {
     useEditorStore.getState().setActiveElement('.btn')
     renderPanel()
 
-    const applyButton = screen.getByRole('button', { name: /apply changes/i })
-    expect(applyButton).toBeDisabled()
+    const saveButton = screen.getByRole('button', { name: /save changes/i })
+    expect(saveButton).toBeDisabled()
   })
 
-  it('shows Apply button enabled when edits exist', () => {
+  it('shows Save button enabled when edits exist', () => {
     useEditorStore.getState().setActiveElement('.btn')
     useEditorStore.getState().setComputedStyles('.btn', { color: 'rgb(0,0,0)' })
     useEditorStore.getState().addEdit('.btn', {
@@ -104,8 +103,34 @@ describe('EditorPanel', () => {
     })
     renderPanel()
 
-    const applyButton = screen.getByRole('button', { name: /apply changes/i })
-    expect(applyButton).not.toBeDisabled()
+    const saveButton = screen.getByRole('button', { name: /save changes/i })
+    expect(saveButton).not.toBeDisabled()
+  })
+
+  it('saves edits to inspectorStore when Save Changes is clicked', () => {
+    useEditorStore.getState().setActiveElement('.btn')
+    useEditorStore.getState().addEdit('.btn', {
+      property: 'color',
+      value: '#ff0000',
+      original: 'rgb(0,0,0)',
+    })
+    renderPanel()
+
+    const saveButton = screen.getByRole('button', { name: /save changes/i })
+    fireEvent.click(saveButton)
+
+    const savedEdits = useInspectorStore.getState().elementEdits['.btn']
+    expect(savedEdits).toHaveLength(1)
+    expect(savedEdits[0]).toEqual({
+      property: 'color',
+      value: '#ff0000',
+      original: 'rgb(0,0,0)',
+    })
+    // Should clear pending edits
+    expect(useEditorStore.getState().pendingEdits).toEqual({})
+    // Should navigate back
+    expect(useEditorStore.getState().activeElement).toBeNull()
+    expect(useInspectorStore.getState().mode).toBe('inspection')
   })
 
   it('shows pending edit count badge', () => {
@@ -178,5 +203,87 @@ describe('EditorPanel', () => {
     renderPanel()
 
     expect(screen.getByText('.btn-primary')).toBeInTheDocument()
+  })
+
+  it('child edit auto-adds child to selection and tracks in pendingEdits', () => {
+    const childContents = JSON.stringify([
+      { tag: 'h1', text: 'Hello', selector: '.parent > h1' },
+      { tag: 'p', text: 'World', selector: '.parent > p' },
+    ])
+
+    useEditorStore.getState().setActiveElement('.parent')
+    useEditorStore.getState().setComputedStyles('.parent', {
+      textContent: '',
+      childContents,
+    })
+
+    renderPanel()
+
+    // Find the h1 child textarea and edit it
+    const textareas = screen.getAllByRole('textbox')
+    const h1Textarea = textareas.find((t) => (t as HTMLTextAreaElement).value === 'Hello')
+    expect(h1Textarea).toBeDefined()
+
+    fireEvent.change(h1Textarea!, { target: { value: 'Updated' } })
+    fireEvent.blur(h1Textarea!)
+
+    // Child should be tracked in pendingEdits
+    const childEdits = useEditorStore.getState().pendingEdits['.parent > h1']
+    expect(childEdits).toHaveLength(1)
+    expect(childEdits[0]).toEqual({
+      property: 'textContent',
+      value: 'Updated',
+      original: 'Hello',
+    })
+
+    // Child should be auto-added to selectedElements
+    const selected = useInspectorStore.getState().selectedElements
+    expect(selected.some((el) => el.selector === '.parent > h1')).toBe(true)
+
+    // Live preview should have been applied
+    expect(mockApplyEdit).toHaveBeenCalledWith('.parent > h1', 'textContent', 'Updated')
+
+    // Save Changes button should be enabled
+    const saveButton = screen.getByRole('button', { name: /save changes/i })
+    expect(saveButton).not.toBeDisabled()
+  })
+
+  it('child edit does not duplicate selection when child already selected', () => {
+    const childContents = JSON.stringify([
+      { tag: 'h1', text: 'Hello', selector: '.parent > h1' },
+      { tag: 'p', text: 'World', selector: '.parent > p' },
+    ])
+
+    // Pre-select the child
+    useInspectorStore.getState().toggleSelectedElement({
+      tagName: 'h1',
+      id: '',
+      classes: [],
+      selector: '.parent > h1',
+      outerHTML: '<h1>Hello</h1>',
+      boundingRect: { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 } as DOMRect,
+      sourceFile: null,
+      sourceLine: null,
+      componentName: null,
+    })
+
+    useEditorStore.getState().setActiveElement('.parent')
+    useEditorStore.getState().setComputedStyles('.parent', {
+      textContent: '',
+      childContents,
+    })
+
+    renderPanel()
+
+    const textareas = screen.getAllByRole('textbox')
+    const h1Textarea = textareas.find((t) => (t as HTMLTextAreaElement).value === 'Hello')
+
+    fireEvent.change(h1Textarea!, { target: { value: 'Updated' } })
+    fireEvent.blur(h1Textarea!)
+
+    // Should still be only one entry for this selector
+    const selected = useInspectorStore.getState().selectedElements
+    const matchCount = selected.filter((el) => el.selector === '.parent > h1').length
+    expect(matchCount).toBe(1)
   })
 })

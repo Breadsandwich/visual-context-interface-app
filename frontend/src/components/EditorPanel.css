@@ -70,13 +70,42 @@
   border-bottom: none;
 }
 
+/* Collapsible section header */
+
+.editor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  margin: 0 0 0.625rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+.editor-section-header[aria-expanded="false"] {
+  margin-bottom: 0;
+}
+
 .editor-section-title {
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--adom-text-muted, #9ca3af);
-  margin: 0 0 0.625rem;
+  margin: 0;
+}
+
+.editor-section-chevron {
+  color: var(--adom-text-muted, #9ca3af);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.editor-section-chevron-open {
+  transform: rotate(90deg);
 }
 
 /* Field layout */
@@ -526,4 +555,294 @@
   font-size: 0.6875rem;
   font-weight: 600;
   line-height: 1;
+}
+
+/* ─── NumberInput ─── */
+
+.editor-number-input {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.editor-label-draggable {
+  cursor: ew-resize;
+  user-select: none;
+  flex-shrink: 0;
+  min-width: 56px;
+}
+
+.editor-number-input-field {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  flex: 1;
+}
+
+.editor-input-sm {
+  width: 100%;
+  padding: 0.25rem 0.375rem;
+  font-size: 0.75rem;
+}
+
+.editor-number-suffix {
+  font-size: 0.6875rem;
+  color: var(--adom-text-muted, #9ca3af);
+  flex-shrink: 0;
+  min-width: 16px;
+}
+
+/* ─── SegmentedControl ─── */
+
+.editor-segmented-control {
+  display: flex;
+  border: 1px solid var(--adom-border, #e5e7eb);
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.editor-segment {
+  flex: 1;
+  padding: 0.3125rem 0.375rem;
+  background: var(--adom-bg, #ffffff);
+  border: none;
+  border-right: 1px solid var(--adom-border, #e5e7eb);
+  color: var(--adom-text-muted, #9ca3af);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.editor-segment:last-child {
+  border-right: none;
+}
+
+.editor-segment:hover {
+  background: var(--adom-bg-active, #f8f9fb);
+}
+
+.editor-segment-active {
+  background: var(--adom-primary, #4361ee);
+  color: #ffffff;
+}
+
+.editor-segment-active:hover {
+  background: var(--adom-primary, #4361ee);
+}
+
+/* ─── Shadow / multi-card list ─── */
+
+.editor-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.editor-card {
+  padding: 0.5rem;
+  background: var(--adom-bg-active, #f8f9fb);
+  border: 1px solid var(--adom-border-light, #f0f1f5);
+  border-radius: 0.375rem;
+}
+
+.editor-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.375rem;
+}
+
+.editor-card-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--adom-text-muted, #9ca3af);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.editor-card-delete {
+  padding: 0.125rem 0.375rem;
+  background: none;
+  border: none;
+  color: var(--adom-text-muted, #9ca3af);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  line-height: 1;
+  border-radius: 0.25rem;
+}
+
+.editor-card-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.editor-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.375rem;
+}
+
+.editor-add-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0.375rem;
+  background: none;
+  border: 1px dashed var(--adom-border, #e5e7eb);
+  border-radius: 0.375rem;
+  color: var(--adom-text-muted, #9ca3af);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.editor-add-button:hover {
+  border-color: var(--adom-primary, #4361ee);
+  color: var(--adom-primary, #4361ee);
+}
+
+/* ─── Toggle / link button ─── */
+
+.editor-toggle-btn {
+  padding: 0.125rem 0.25rem;
+  background: none;
+  border: 1px solid var(--adom-border, #e5e7eb);
+  border-radius: 0.25rem;
+  color: var(--adom-text-muted, #9ca3af);
+  cursor: pointer;
+  font-size: 0.6875rem;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.editor-toggle-btn-active {
+  background: var(--adom-primary, #4361ee);
+  border-color: var(--adom-primary, #4361ee);
+  color: #ffffff;
+}
+
+/* ─── Row layout helpers ─── */
+
+.editor-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+}
+
+.editor-row:last-child {
+  margin-bottom: 0;
+}
+
+/* ─── Border radius visual ─── */
+
+.editor-corners-visual {
+  display: grid;
+  grid-template-columns: 48px 1fr 48px;
+  grid-template-rows: auto 48px auto;
+  gap: 0.25rem;
+  align-items: center;
+  justify-items: center;
+}
+
+.editor-corners-box {
+  grid-column: 2;
+  grid-row: 2;
+  width: 100%;
+  height: 48px;
+  border: 2px solid var(--adom-border, #e5e7eb);
+  border-radius: var(--tl, 0) var(--tr, 0) var(--br, 0) var(--bl, 0);
+  background: rgba(67, 97, 238, 0.04);
+}
+
+/* ─── Transform origin grid ─── */
+
+.editor-origin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 20px);
+  grid-template-rows: repeat(3, 20px);
+  gap: 2px;
+}
+
+.editor-origin-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--adom-border, #e5e7eb);
+  background: var(--adom-bg, #ffffff);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.editor-origin-dot:hover {
+  border-color: var(--adom-primary, #4361ee);
+}
+
+.editor-origin-dot-active {
+  background: var(--adom-primary, #4361ee);
+  border-color: var(--adom-primary, #4361ee);
+}
+
+/* ─── Hover state tabs ─── */
+
+.editor-state-tabs {
+  display: flex;
+  border: 1px solid var(--adom-border, #e5e7eb);
+  border-radius: 0.375rem;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.editor-state-tab {
+  flex: 1;
+  padding: 0.375rem 0.25rem;
+  background: var(--adom-bg, #ffffff);
+  border: none;
+  border-right: 1px solid var(--adom-border, #e5e7eb);
+  color: var(--adom-text-muted, #9ca3af);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.editor-state-tab:last-child {
+  border-right: none;
+}
+
+.editor-state-tab:hover {
+  background: var(--adom-bg-active, #f8f9fb);
+}
+
+.editor-state-tab-active {
+  background: var(--adom-primary, #4361ee);
+  color: #ffffff;
+}
+
+.editor-state-tab-active:hover {
+  background: var(--adom-primary, #4361ee);
+}
+
+/* ─── Gradient controls ─── */
+
+.editor-gradient-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.editor-gradient-preview {
+  width: 100%;
+  height: 24px;
+  border-radius: 0.25rem;
+  border: 1px solid var(--adom-border, #e5e7eb);
+  margin-bottom: 0.5rem;
 }

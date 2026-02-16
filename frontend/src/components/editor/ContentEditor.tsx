@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { CollapsibleSection } from './CollapsibleSection'
 
 interface ChildContent {
   tag: string
@@ -35,9 +36,7 @@ export function ContentEditor({ value, childContents, onChange, onChildChange }:
   }
 
   return (
-    <div className="editor-section">
-      <h4 className="editor-section-title">Content</h4>
-
+    <CollapsibleSection title="Content">
       {parsedChildren.length > 1 ? (
         <div className="editor-child-contents">
           {parsedChildren.map((child, i) => (
@@ -57,7 +56,7 @@ export function ContentEditor({ value, childContents, onChange, onChildChange }:
           placeholder="Element text content..."
         />
       )}
-    </div>
+    </CollapsibleSection>
   )
 }
 

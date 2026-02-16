@@ -1,12 +1,29 @@
-import { useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useEditorStore } from '../stores/editorStore'
 import { useInspectorStore } from '../stores/inspectorStore'
 import { ContentEditor } from './editor/ContentEditor'
-import { ColorPicker } from './editor/ColorPicker'
+import { FillEditor } from './editor/FillEditor'
+import { StrokeEditor } from './editor/StrokeEditor'
+import { BorderRadiusEditor } from './editor/BorderRadiusEditor'
 import { TypographyEditor } from './editor/TypographyEditor'
+import { EffectsEditor } from './editor/EffectsEditor'
+import { ShadowEditor } from './editor/ShadowEditor'
+import { TransformEditor } from './editor/TransformEditor'
 import { SpacingEditor } from './editor/SpacingEditor'
 import { LayoutEditor } from './editor/LayoutEditor'
+import { PositionEditor } from './editor/PositionEditor'
+import { OverflowEditor } from './editor/OverflowEditor'
+import { TransitionEditor } from './editor/TransitionEditor'
+import { HoverStateEditor, type InteractionState } from './editor/HoverStateEditor'
 import type { PropertyEdit } from '../types/inspector'
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
 import './EditorPanel.css'
 
 function mergeEdits(existing: PropertyEdit[], incoming: PropertyEdit[]): PropertyEdit[] {
@@ -35,6 +52,8 @@ export function EditorPanel({
   const computedStyles = useEditorStore((s) => s.computedStyles)
   const sourceInfoMap = useEditorStore((s) => s.sourceInfoMap)
   const selectedElements = useInspectorStore((s) => s.selectedElements)
+
+  const [activeState, setActiveState] = useState<InteractionState>('normal')
 
   const elementEdits = activeElement ? (pendingEdits[activeElement] ?? []) : []
   const styles = activeElement ? (computedStyles[activeElement] ?? {}) : {}
@@ -70,14 +89,18 @@ export function EditorPanel({
   const handlePropertyChange = useCallback(
     (property: string, value: string) => {
       if (!activeElement) return
+      const prefixedProperty = activeState === 'normal' ? property : `${activeState}:${property}`
       useEditorStore.getState().addEdit(activeElement, {
-        property,
+        property: prefixedProperty,
         value,
         original: styles[property] ?? '',
       })
-      applyEdit(activeElement, property, value)
+      // Only apply live preview for normal state edits
+      if (activeState === 'normal') {
+        applyEdit(activeElement, property, value)
+      }
     },
-    [activeElement, styles, applyEdit]
+    [activeElement, styles, applyEdit, activeState]
   )
 
   const handleChildChange = useCallback(
@@ -100,7 +123,7 @@ export function EditorPanel({
           id: '',
           classes: [],
           selector: childSelector,
-          outerHTML: `<${tagName}>${original}</${tagName}>`,
+          outerHTML: `<${tagName}>${escapeHtml(original)}</${tagName}>`,
           boundingRect: { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 } as DOMRect,
           sourceFile: null,
           sourceLine: null,
@@ -169,6 +192,13 @@ export function EditorPanel({
       </div>
 
       <div className="editor-panel-content">
+        <div className="editor-section">
+          <HoverStateEditor
+            activeState={activeState}
+            onStateChange={setActiveState}
+          />
+        </div>
+
         <ContentEditor
           value={getVal('textContent')}
           childContents={styles['childContents'] ?? ''}
@@ -176,24 +206,27 @@ export function EditorPanel({
           onChildChange={handleChildChange}
         />
 
-        <div className="editor-section">
-          <h4 className="editor-section-title">Colors</h4>
-          <ColorPicker
-            label="Text"
-            value={getVal('color')}
-            onChange={(value) => handlePropertyChange('color', value)}
-          />
-          <ColorPicker
-            label="Background"
-            value={getVal('backgroundColor')}
-            onChange={(value) => handlePropertyChange('backgroundColor', value)}
-          />
-          <ColorPicker
-            label="Border"
-            value={getVal('borderColor')}
-            onChange={(value) => handlePropertyChange('borderColor', value)}
-          />
-        </div>
+        <FillEditor
+          color={getVal('color')}
+          backgroundColor={getVal('backgroundColor')}
+          backgroundImage={getVal('backgroundImage')}
+          onPropertyChange={handlePropertyChange}
+        />
+
+        <StrokeEditor
+          borderColor={getVal('borderColor')}
+          borderWidth={getVal('borderWidth')}
+          borderStyle={getVal('borderStyle')}
+          onPropertyChange={handlePropertyChange}
+        />
+
+        <BorderRadiusEditor
+          borderTopLeftRadius={getVal('borderTopLeftRadius')}
+          borderTopRightRadius={getVal('borderTopRightRadius')}
+          borderBottomRightRadius={getVal('borderBottomRightRadius')}
+          borderBottomLeftRadius={getVal('borderBottomLeftRadius')}
+          onPropertyChange={handlePropertyChange}
+        />
 
         <TypographyEditor
           fontFamily={getVal('fontFamily')}
@@ -201,6 +234,30 @@ export function EditorPanel({
           fontWeight={getVal('fontWeight')}
           lineHeight={getVal('lineHeight')}
           letterSpacing={getVal('letterSpacing')}
+          textAlign={getVal('textAlign')}
+          textDecoration={getVal('textDecoration')}
+          textTransform={getVal('textTransform')}
+          whiteSpace={getVal('whiteSpace')}
+          wordSpacing={getVal('wordSpacing')}
+          onPropertyChange={handlePropertyChange}
+        />
+
+        <EffectsEditor
+          opacity={getVal('opacity')}
+          filter={getVal('filter')}
+          backdropFilter={getVal('backdropFilter')}
+          mixBlendMode={getVal('mixBlendMode')}
+          onPropertyChange={handlePropertyChange}
+        />
+
+        <ShadowEditor
+          boxShadow={getVal('boxShadow')}
+          onPropertyChange={handlePropertyChange}
+        />
+
+        <TransformEditor
+          transform={getVal('transform')}
+          transformOrigin={getVal('transformOrigin')}
           onPropertyChange={handlePropertyChange}
         />
 
@@ -224,7 +281,39 @@ export function EditorPanel({
           alignItems={getVal('alignItems')}
           justifyContent={getVal('justifyContent')}
           gap={getVal('gap')}
-          opacity={getVal('opacity')}
+          gridTemplateColumns={getVal('gridTemplateColumns')}
+          gridTemplateRows={getVal('gridTemplateRows')}
+          gridGap={getVal('gridGap')}
+          flexWrap={getVal('flexWrap')}
+          flexGrow={getVal('flexGrow')}
+          flexShrink={getVal('flexShrink')}
+          flexBasis={getVal('flexBasis')}
+          minWidth={getVal('minWidth')}
+          maxWidth={getVal('maxWidth')}
+          minHeight={getVal('minHeight')}
+          maxHeight={getVal('maxHeight')}
+          onPropertyChange={handlePropertyChange}
+        />
+
+        <PositionEditor
+          position={getVal('position')}
+          top={getVal('top')}
+          right={getVal('right')}
+          bottom={getVal('bottom')}
+          left={getVal('left')}
+          zIndex={getVal('zIndex')}
+          onPropertyChange={handlePropertyChange}
+        />
+
+        <OverflowEditor
+          overflowX={getVal('overflowX')}
+          overflowY={getVal('overflowY')}
+          cursor={getVal('cursor')}
+          onPropertyChange={handlePropertyChange}
+        />
+
+        <TransitionEditor
+          transition={getVal('transition')}
           onPropertyChange={handlePropertyChange}
         />
 

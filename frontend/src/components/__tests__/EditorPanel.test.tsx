@@ -72,7 +72,7 @@ describe('EditorPanel', () => {
     renderPanel()
 
     expect(screen.getByText('Content')).toBeInTheDocument()
-    expect(screen.getByText('Colors')).toBeInTheDocument()
+    expect(screen.getByText('Fill')).toBeInTheDocument()
     expect(screen.getByText('Typography')).toBeInTheDocument()
     expect(screen.getByText('Spacing')).toBeInTheDocument()
     expect(screen.getByText('Layout')).toBeInTheDocument()

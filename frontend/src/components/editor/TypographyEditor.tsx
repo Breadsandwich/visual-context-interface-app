@@ -1,9 +1,18 @@
+import { CollapsibleSection } from './CollapsibleSection'
+import { SegmentedControl } from './controls/SegmentedControl'
+import { NumberInput } from './controls/NumberInput'
+
 interface TypographyEditorProps {
   fontFamily: string
   fontSize: string
   fontWeight: string
   lineHeight: string
   letterSpacing: string
+  textAlign: string
+  textDecoration: string
+  textTransform: string
+  whiteSpace: string
+  wordSpacing: string
   onPropertyChange: (property: string, value: string) => void
 }
 
@@ -20,21 +29,48 @@ const FONT_FAMILIES = [
 
 const FONT_WEIGHTS = ['100', '200', '300', '400', '500', '600', '700', '800', '900']
 
+const TEXT_ALIGN_OPTIONS = [
+  { value: 'left', label: 'Left' },
+  { value: 'center', label: 'Center' },
+  { value: 'right', label: 'Right' },
+  { value: 'justify', label: 'Justify' },
+]
+
+const TEXT_DECORATION_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'underline', label: 'U̲' },
+  { value: 'line-through', label: 'S̶' },
+]
+
+const TEXT_TRANSFORM_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'uppercase', label: 'AB' },
+  { value: 'lowercase', label: 'ab' },
+  { value: 'capitalize', label: 'Ab' },
+]
+
+const WHITE_SPACE_OPTIONS = ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line']
+
 export function TypographyEditor({
   fontFamily,
   fontSize,
   fontWeight,
   lineHeight,
   letterSpacing,
+  textAlign,
+  textDecoration,
+  textTransform,
+  whiteSpace,
+  wordSpacing,
   onPropertyChange,
 }: TypographyEditorProps) {
   const fontSizeNum = parseFloat(fontSize) || 16
   const lineHeightNum = parseFloat(lineHeight) || 1.5
   const letterSpacingNum = parseFloat(letterSpacing) || 0
+  const wordSpacingNum = parseFloat(wordSpacing) || 0
 
   return (
-    <div className="editor-section">
-      <h4 className="editor-section-title">Typography</h4>
+    <CollapsibleSection title="Typography">
 
       <div className="editor-field">
         <label className="editor-label">Font Family</label>
@@ -107,6 +143,50 @@ export function TypographyEditor({
         />
         <span className="editor-slider-value">{letterSpacingNum}px</span>
       </div>
-    </div>
+
+      <SegmentedControl
+        label="Text Align"
+        options={TEXT_ALIGN_OPTIONS}
+        value={textAlign}
+        onChange={(v) => onPropertyChange('textAlign', v)}
+      />
+
+      <SegmentedControl
+        label="Decoration"
+        options={TEXT_DECORATION_OPTIONS}
+        value={textDecoration.split(' ')[0]}
+        onChange={(v) => onPropertyChange('textDecoration', v)}
+      />
+
+      <SegmentedControl
+        label="Transform"
+        options={TEXT_TRANSFORM_OPTIONS}
+        value={textTransform}
+        onChange={(v) => onPropertyChange('textTransform', v)}
+      />
+
+      <div className="editor-field">
+        <label className="editor-label">White Space</label>
+        <select
+          className="editor-select"
+          value={whiteSpace}
+          onChange={(e) => onPropertyChange('whiteSpace', e.target.value)}
+        >
+          {WHITE_SPACE_OPTIONS.map((w) => (
+            <option key={w} value={w}>{w}</option>
+          ))}
+        </select>
+      </div>
+
+      <NumberInput
+        label="Word Gap"
+        value={wordSpacingNum}
+        min={-5}
+        max={20}
+        step={0.5}
+        suffix="px"
+        onChange={(v) => onPropertyChange('wordSpacing', `${v}px`)}
+      />
+    </CollapsibleSection>
   )
 }

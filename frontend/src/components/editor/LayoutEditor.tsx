@@ -1,3 +1,8 @@
+import { CollapsibleSection } from './CollapsibleSection'
+import { CssValueInput } from './controls/CssValueInput'
+import { NumberInput } from './controls/NumberInput'
+import { SegmentedControl } from './controls/SegmentedControl'
+
 interface LayoutEditorProps {
   display: string
   width: string
@@ -6,7 +11,17 @@ interface LayoutEditorProps {
   alignItems: string
   justifyContent: string
   gap: string
-  opacity: string
+  gridTemplateColumns: string
+  gridTemplateRows: string
+  gridGap: string
+  flexWrap: string
+  flexGrow: string
+  flexShrink: string
+  flexBasis: string
+  minWidth: string
+  maxWidth: string
+  minHeight: string
+  maxHeight: string
   onPropertyChange: (property: string, value: string) => void
 }
 
@@ -25,6 +40,12 @@ const JUSTIFY_OPTIONS = [
   'space-evenly',
 ]
 
+const FLEX_WRAP_OPTIONS = [
+  { value: 'nowrap', label: 'No Wrap' },
+  { value: 'wrap', label: 'Wrap' },
+  { value: 'wrap-reverse', label: 'Reverse' },
+]
+
 export function LayoutEditor({
   display,
   width,
@@ -33,15 +54,26 @@ export function LayoutEditor({
   alignItems,
   justifyContent,
   gap,
-  opacity,
+  gridTemplateColumns,
+  gridTemplateRows,
+  gridGap,
+  flexWrap,
+  flexGrow,
+  flexShrink,
+  flexBasis,
+  minWidth,
+  maxWidth,
+  minHeight,
+  maxHeight,
   onPropertyChange,
 }: LayoutEditorProps) {
-  const opacityNum = parseFloat(opacity) || 1
   const isFlexLayout = display === 'flex' || display === 'inline-flex'
+  const isGridLayout = display === 'grid'
+  const flexGrowNum = parseFloat(flexGrow) || 0
+  const flexShrinkNum = parseFloat(flexShrink) || 1
 
   return (
-    <div className="editor-section">
-      <h4 className="editor-section-title">Layout</h4>
+    <CollapsibleSection title="Layout">
 
       <div className="editor-field">
         <label className="editor-label">Display</label>
@@ -80,6 +112,33 @@ export function LayoutEditor({
         />
       </div>
 
+      <div className="editor-card-grid">
+        <CssValueInput
+          label="Min W"
+          value={minWidth}
+          placeholder="0"
+          onChange={(v) => onPropertyChange('minWidth', v)}
+        />
+        <CssValueInput
+          label="Max W"
+          value={maxWidth}
+          placeholder="none"
+          onChange={(v) => onPropertyChange('maxWidth', v)}
+        />
+        <CssValueInput
+          label="Min H"
+          value={minHeight}
+          placeholder="0"
+          onChange={(v) => onPropertyChange('minHeight', v)}
+        />
+        <CssValueInput
+          label="Max H"
+          value={maxHeight}
+          placeholder="none"
+          onChange={(v) => onPropertyChange('maxHeight', v)}
+        />
+      </div>
+
       {isFlexLayout && (
         <>
           <div className="editor-field">
@@ -96,6 +155,13 @@ export function LayoutEditor({
               ))}
             </select>
           </div>
+
+          <SegmentedControl
+            label="Flex Wrap"
+            options={FLEX_WRAP_OPTIONS}
+            value={flexWrap}
+            onChange={(v) => onPropertyChange('flexWrap', v)}
+          />
 
           <div className="editor-field">
             <label className="editor-label">Align Items</label>
@@ -137,22 +203,89 @@ export function LayoutEditor({
               placeholder="0px"
             />
           </div>
+
+          <div className="editor-card-grid">
+            <NumberInput
+              label="Grow"
+              value={flexGrowNum}
+              min={0}
+              max={10}
+              step={1}
+              onChange={(v) => onPropertyChange('flexGrow', String(v))}
+            />
+            <NumberInput
+              label="Shrink"
+              value={flexShrinkNum}
+              min={0}
+              max={10}
+              step={1}
+              onChange={(v) => onPropertyChange('flexShrink', String(v))}
+            />
+          </div>
+
+          <CssValueInput
+            label="Flex Basis"
+            value={flexBasis}
+            placeholder="auto"
+            onChange={(v) => onPropertyChange('flexBasis', v)}
+          />
         </>
       )}
 
-      <div className="editor-slider-row">
-        <label className="editor-label">Opacity</label>
-        <input
-          type="range"
-          className="editor-slider"
-          min={0}
-          max={1}
-          step={0.05}
-          value={opacityNum}
-          onChange={(e) => onPropertyChange('opacity', e.target.value)}
-        />
-        <span className="editor-slider-value">{opacityNum}</span>
-      </div>
-    </div>
+      {isGridLayout && (
+        <>
+          <CssValueInput
+            label="Columns"
+            value={gridTemplateColumns}
+            placeholder="1fr 1fr"
+            onChange={(v) => onPropertyChange('gridTemplateColumns', v)}
+          />
+
+          <CssValueInput
+            label="Rows"
+            value={gridTemplateRows}
+            placeholder="auto"
+            onChange={(v) => onPropertyChange('gridTemplateRows', v)}
+          />
+
+          <CssValueInput
+            label="Grid Gap"
+            value={gridGap}
+            placeholder="0px"
+            onChange={(v) => onPropertyChange('gridGap', v)}
+          />
+
+          <div className="editor-field">
+            <label className="editor-label">Align Items</label>
+            <select
+              className="editor-select"
+              value={alignItems}
+              onChange={(e) => onPropertyChange('alignItems', e.target.value)}
+            >
+              {ALIGN_OPTIONS.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="editor-field">
+            <label className="editor-label">Justify Content</label>
+            <select
+              className="editor-select"
+              value={justifyContent}
+              onChange={(e) => onPropertyChange('justifyContent', e.target.value)}
+            >
+              {JUSTIFY_OPTIONS.map((j) => (
+                <option key={j} value={j}>
+                  {j}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
+    </CollapsibleSection>
   )
 }

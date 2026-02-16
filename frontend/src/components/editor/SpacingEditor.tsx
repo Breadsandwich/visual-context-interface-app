@@ -1,3 +1,5 @@
+import { CollapsibleSection } from './CollapsibleSection'
+
 interface SpacingEditorProps {
   marginTop: string
   marginRight: string
@@ -44,8 +46,7 @@ export function SpacingEditor({
   onPropertyChange,
 }: SpacingEditorProps) {
   return (
-    <div className="editor-section">
-      <h4 className="editor-section-title">Spacing</h4>
+    <CollapsibleSection title="Spacing">
 
       <div className="spacing-box-model">
         <div className="spacing-margin-box">
@@ -114,6 +115,6 @@ export function SpacingEditor({
           </div>
         </div>
       </div>
-    </div>
+    </CollapsibleSection>
   )
 }

@@ -258,3 +258,39 @@ def read_context_file(file_path: str | Path) -> dict:
         )
     raw = path.read_text(encoding="utf-8")
     return json.loads(raw)
+
+
+def format_edit_instructions(ai_edits: list[dict]) -> str:
+    """Convert structured edit data into precise, unambiguous agent instructions."""
+    lines = ["# Direct Edit Instructions", ""]
+    lines.append(
+        "The user has made specific visual edits that need to be applied to source code."
+    )
+    lines.append(
+        "Apply EXACTLY these changes - do not interpret or expand them."
+    )
+    lines.append("")
+
+    for edit in ai_edits:
+        selector = edit.get("selector", "unknown")
+        source = edit.get("sourceFile")
+        line_num = edit.get("sourceLine")
+        component = edit.get("componentName")
+
+        location = ""
+        if source:
+            location = f" in {source}"
+            if line_num:
+                location += f":{line_num}"
+            if component:
+                location += f" ({component})"
+
+        lines.append(f"## Element: `{selector}`{location}")
+        for change in edit.get("changes", []):
+            prop = change.get("property", "")
+            old = change.get("original", "")
+            new = change.get("value", "")
+            lines.append(f"- Change `{prop}` from `{old}` to `{new}`")
+        lines.append("")
+
+    return "\n".join(lines)

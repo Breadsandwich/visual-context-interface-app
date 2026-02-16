@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from datetime import datetime, timezone
 from injection import inject_inspector_script, rewrite_asset_paths
+from source_editor import partition_edits, apply_inline_style_edit
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +233,79 @@ async def agent_status():
             }
     except Exception:
         return {"status": "unavailable"}
+
+
+class ApplyEditsRequest(BaseModel):
+    edits: list[dict] = Field(..., description="List of element edits to apply")
+
+    @field_validator("edits")
+    @classmethod
+    def validate_edits(cls, v: list) -> list:
+        if len(v) > 100:
+            raise ValueError("Too many edits (max 100)")
+        return v
+
+
+@app.post("/api/apply-edits")
+async def apply_edits_endpoint(request_body: ApplyEditsRequest):
+    """Apply direct edits to source files via hybrid engine.
+
+    Partitions edits into deterministic (direct file write) and AI-assisted.
+    Executes deterministic edits immediately, returns AI-assisted for agent routing.
+    """
+    if not VCI_OUTPUT_DIR:
+        return Response(
+            content=json_module.dumps({
+                "success": False,
+                "error": "VCI_OUTPUT_DIR not configured",
+            }),
+            status_code=503,
+            media_type="application/json",
+        )
+
+    try:
+        project_dir = Path(VCI_OUTPUT_DIR).resolve(strict=True)
+    except (FileNotFoundError, RuntimeError, OSError):
+        return Response(
+            content=json_module.dumps({
+                "success": False,
+                "error": f"VCI_OUTPUT_DIR does not exist: {VCI_OUTPUT_DIR}",
+            }),
+            status_code=503,
+            media_type="application/json",
+        )
+
+    deterministic, ai_assisted = partition_edits(request_body.edits)
+
+    applied = []
+    failed = []
+    for edit in deterministic:
+        source_file = edit.get("sourceFile")
+        source_line = edit.get("sourceLine")
+        for change in edit.get("changes", []):
+            success = apply_inline_style_edit(
+                project_dir,
+                source_file,
+                source_line,
+                change["property"],
+                change["value"],
+            )
+            entry = {
+                "selector": edit["selector"],
+                "property": change["property"],
+                "value": change["value"],
+            }
+            if success:
+                applied.append(entry)
+            else:
+                failed.append(entry)
+
+    return {
+        "success": True,
+        "applied": applied,
+        "failed": failed,
+        "aiAssisted": ai_assisted,
+    }
 
 
 @app.get("/inspector/{filename:path}")

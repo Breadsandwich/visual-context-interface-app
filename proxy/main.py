@@ -248,6 +248,7 @@ async def agent_status():
                 "filesChanged": data.get("filesChanged", []),
                 "message": data.get("message"),
                 "turns": data.get("turns", 0),
+                "error": data.get("error"),
                 "clarification": data.get("clarification"),
                 "progress": data.get("progress", []),
                 "plan": data.get("plan"),

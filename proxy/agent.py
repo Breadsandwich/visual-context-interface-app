@@ -121,7 +121,7 @@ async def _run_analyze(client: AsyncAnthropic, formatted_prompt: str) -> dict[st
     return {"action": "proceed", "plan": result.get("plan", "")}
 
 
-def _build_turn_summary(turn: int, assistant_content: list, tool_results: list[dict], files_changed: set[str]) -> dict[str, Any]:
+def _build_turn_summary(turn: int, assistant_content: list, tool_results: list[dict]) -> dict[str, Any]:
     """Build a human-readable turn summary from tool calls and results."""
     files_read: list[str] = []
     files_written: list[str] = []
@@ -275,7 +275,7 @@ async def _execute_agent_loop(client: AsyncAnthropic, formatted_prompt: str, out
                 })
 
             # Build and append turn summary
-            summary = _build_turn_summary(turn + 1, assistant_content, tool_results, files_changed)
+            summary = _build_turn_summary(turn + 1, assistant_content, tool_results)
             progress = [*_current_run.get("progress", []), summary]
             _current_run = {
                 **_current_run,
@@ -439,17 +439,18 @@ async def agent_respond(request_body: AgentRespondRequest):
     """Accept user's clarification response and resume agent."""
     global _current_run
 
-    if _current_run["status"] != "clarifying":
-        return Response(
-            content=json.dumps({"error": "Agent is not waiting for clarification"}),
-            status_code=409,
-            media_type="application/json",
-        )
+    async with _agent_lock:
+        if _current_run["status"] != "clarifying":
+            return Response(
+                content=json.dumps({"error": "Agent is not waiting for clarification"}),
+                status_code=409,
+                media_type="application/json",
+            )
 
-    _current_run = {**_current_run, "user_response": request_body.response}
+        _current_run = {**_current_run, "user_response": request_body.response}
 
-    task = asyncio.create_task(_resume_agent())
-    task.add_done_callback(_on_agent_done)
+        task = asyncio.create_task(_resume_agent())
+        task.add_done_callback(_on_agent_done)
 
     return {"accepted": True, "message": "Resuming with your response"}
 

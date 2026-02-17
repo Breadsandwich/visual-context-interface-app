@@ -69,8 +69,11 @@ function ClarificationToast({ question, onSubmit, onSkip }: {
   const handleSubmit = async () => {
     if (!input.trim() || submitting) return
     setSubmitting(true)
-    await onSubmit(input.trim())
-    setSubmitting(false)
+    try {
+      await onSubmit(input.trim())
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

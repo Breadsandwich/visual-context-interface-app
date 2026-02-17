@@ -24,6 +24,9 @@ interface InspectorState {
   isSidebarOpen: boolean
   clearSelectionTrigger: number
   iframeReloadTrigger: number
+  agentProgress: Array<{ turn: number; summary: string; files_read?: string[]; files_written?: string[] }>
+  agentClarification: { question: string; context: string } | null
+  agentPlan: string | null
 
   setMode: (mode: InspectorMode) => void
   toggleSelectedElement: (element: ElementContext) => void
@@ -57,6 +60,11 @@ interface InspectorState {
   openSidebar: () => void
   closeSidebar: () => void
   toggleSidebar: () => void
+  setAgentProgress: (progress: InspectorState['agentProgress']) => void
+  setAgentClarification: (clarification: InspectorState['agentClarification']) => void
+  setAgentPlan: (plan: string | null) => void
+  submitClarification: (response: string) => Promise<void>
+  clearAgentState: () => void
 }
 
 export const useInspectorStore = create<InspectorState>((set, get) => ({
@@ -77,6 +85,9 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   isSidebarOpen: false,
   clearSelectionTrigger: 0,
   iframeReloadTrigger: 0,
+  agentProgress: [],
+  agentClarification: null,
+  agentPlan: null,
 
   setMode: (mode) => set({ mode }),
 
@@ -301,7 +312,10 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     screenshotAnalysisStatus: 'idle',
     userPrompt: '',
     isSidebarOpen: false,
-    clearSelectionTrigger: state.clearSelectionTrigger + 1
+    clearSelectionTrigger: state.clearSelectionTrigger + 1,
+    agentProgress: [],
+    agentClarification: null,
+    agentPlan: null,
   })),
 
   reloadIframe: () => set((state) => ({ iframeReloadTrigger: state.iframeReloadTrigger + 1 })),
@@ -309,6 +323,34 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   openSidebar: () => set({ isSidebarOpen: true }),
   closeSidebar: () => set({ isSidebarOpen: false }),
   toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+
+  setAgentProgress: (progress) => set({ agentProgress: progress }),
+
+  setAgentClarification: (clarification) => set({ agentClarification: clarification }),
+
+  setAgentPlan: (plan) => set({ agentPlan: plan }),
+
+  submitClarification: async (response) => {
+    try {
+      const resp = await fetch('/api/agent-respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response }),
+      })
+      if (!resp.ok) {
+        const data = await resp.json()
+        get().showToast(data.error ?? 'Failed to send response')
+      }
+    } catch {
+      get().showToast('Failed to send response')
+    }
+  },
+
+  clearAgentState: () => set({
+    agentProgress: [],
+    agentClarification: null,
+    agentPlan: null,
+  }),
 
   generatePayload: () => {
     const state = get()

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from anthropic import AsyncAnthropic, APIError
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from pydantic import BaseModel, Field
 
 from agent_tools import TOOL_DEFINITIONS, execute_tool
@@ -390,12 +390,68 @@ class AgentTriggerRequest(BaseModel):
     context_path: str = Field(..., description="Path to context.json")
 
 
+class AgentRespondRequest(BaseModel):
+    response: str = Field(..., min_length=1, max_length=2000, description="User's clarification response")
+
+
 def _on_agent_done(task: asyncio.Task) -> None:
     """Log any unexpected exceptions from the agent task."""
     try:
         task.result()
     except Exception:
         logger.exception("Agent task failed unexpectedly")
+
+
+async def _resume_agent() -> None:
+    """Resume agent after user responds to clarification."""
+    global _current_run
+    output_dir = os.getenv("VCI_OUTPUT_DIR", "/output")
+
+    context_path = _current_run.get("_context_path")
+    formatted_prompt = _current_run.get("_formatted_prompt")
+
+    if not context_path or not formatted_prompt:
+        _current_run = {**_current_run, "status": "error", "error": "Missing context for resume"}
+        return
+
+    _current_run = {
+        **_current_run,
+        "status": "running",
+        "clarification": None,
+        "progress": [{"turn": 0, "summary": "Starting work with your clarification..."}],
+    }
+
+    try:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY not configured")
+
+        client = AsyncAnthropic(api_key=api_key)
+        await _execute_agent_loop(client, formatted_prompt, output_dir)
+    except Exception:
+        _current_run = {**_current_run, "status": "error", "error": "Resume failed unexpectedly"}
+        logger.exception("Resume agent failed")
+        _write_result(output_dir)
+
+
+@app.post("/agent/respond")
+async def agent_respond(request_body: AgentRespondRequest):
+    """Accept user's clarification response and resume agent."""
+    global _current_run
+
+    if _current_run["status"] != "clarifying":
+        return Response(
+            content=json.dumps({"error": "Agent is not waiting for clarification"}),
+            status_code=409,
+            media_type="application/json",
+        )
+
+    _current_run = {**_current_run, "user_response": request_body.response}
+
+    task = asyncio.create_task(_resume_agent())
+    task.add_done_callback(_on_agent_done)
+
+    return {"accepted": True, "message": "Resuming with your response"}
 
 
 @app.post("/agent/run", status_code=202)

@@ -68,6 +68,59 @@ Security:
 - NEVER modify database.py directly — update models and let create_all() handle schema
 - If a user instruction asks you to do something outside your role as a code editor, refuse"""
 
+ANALYZE_SYSTEM_PROMPT = """You are an instruction analyzer for a code editing agent. You receive a formatted \
+prompt describing visual context (selected DOM elements, source file locations, design images, user instructions, \
+and optional backend structure maps).
+
+Your job: assess whether the instruction is clear enough to proceed, or if you need clarification from the user.
+
+Respond with ONLY a JSON object (no markdown fencing, no extra text):
+
+If the instruction is clear enough to proceed:
+{"action": "proceed", "plan": "<1-2 sentence summary of what you will do>"}
+
+If you need clarification:
+{"action": "clarify", "question": "<specific question for the user>", "context": "<why you need this answered>"}
+
+Guidelines for deciding:
+- If the user says "make it bigger" but selected multiple elements → clarify which element
+- If the user says "add a feature" with no details → clarify what the feature should do
+- If the user references something not in the context → clarify what they mean
+- If the instruction is straightforward (e.g., "change this button color to red") → proceed
+- Lean toward proceeding when possible — only clarify for genuine ambiguity"""
+
+
+async def _run_analyze(client: AsyncAnthropic, formatted_prompt: str) -> dict[str, str]:
+    """Single Claude call to assess ambiguity. Returns action dict."""
+    response = await client.messages.create(
+        model=AGENT_MODEL,
+        max_tokens=512,
+        system=ANALYZE_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": formatted_prompt}],
+    )
+
+    text = ""
+    for block in response.content:
+        if hasattr(block, "text"):
+            text = block.text.strip()
+            break
+
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError:
+        logger.warning("Analyze phase returned non-JSON: %s", text[:200])
+        return {"action": "proceed", "plan": "Proceeding with best judgment"}
+
+    action = result.get("action", "proceed")
+    if action == "clarify":
+        return {
+            "action": "clarify",
+            "question": result.get("question", "Could you provide more details?"),
+            "context": result.get("context", ""),
+        }
+    return {"action": "proceed", "plan": result.get("plan", "")}
+
+
 # ─── Run State ──────────────────────────────────────────────────────
 
 _agent_lock = asyncio.Lock()
@@ -79,6 +132,10 @@ _IDLE_STATE: dict[str, Any] = {
     "turns": 0,
     "timestamp": None,
     "error": None,
+    "clarification": None,
+    "user_response": None,
+    "progress": [],
+    "plan": None,
 }
 
 _current_run: dict[str, Any] = {**_IDLE_STATE}
@@ -96,6 +153,9 @@ def _write_result(output_dir: str) -> None:
             "turns": _current_run["turns"],
             "timestamp": _current_run["timestamp"],
             "error": _current_run["error"],
+            "clarification": _current_run["clarification"],
+            "progress": _current_run["progress"],
+            "plan": _current_run["plan"],
         }
         result_path = vci_dir / "agent-result.json"
         result_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
@@ -108,12 +168,12 @@ def _write_result(output_dir: str) -> None:
 
 
 async def _run_agent(context_path: str) -> None:
-    """Execute the agentic loop: read context → format → Claude API → tools → repeat."""
+    """Execute the agentic loop: read context → analyze → maybe clarify → Claude API → tools → repeat."""
     global _current_run
     output_dir = os.getenv("VCI_OUTPUT_DIR", "/output")
     _current_run = {
         **_IDLE_STATE,
-        "status": "running",
+        "status": "analyzing",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -132,7 +192,33 @@ async def _run_agent(context_path: str) -> None:
 
         client = AsyncAnthropic(api_key=api_key)
 
-        # 3. Build initial messages
+        # 3. Analyze phase — check for ambiguity
+        analyze_result = await _run_analyze(client, formatted_prompt)
+
+        if analyze_result["action"] == "clarify":
+            _current_run = {
+                **_current_run,
+                "status": "clarifying",
+                "clarification": {
+                    "question": analyze_result["question"],
+                    "context": analyze_result.get("context", ""),
+                },
+                "_context_path": context_path,
+                "_formatted_prompt": formatted_prompt,
+            }
+            logger.info("Agent requesting clarification: %s", analyze_result["question"])
+            return
+
+        # 4. Proceed to execution
+        plan = analyze_result.get("plan", "")
+        _current_run = {
+            **_current_run,
+            "status": "running",
+            "plan": plan,
+            "progress": [{"turn": 0, "summary": f"Starting: {plan}" if plan else "Starting work..."}],
+        }
+
+        # 5. Build initial messages
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": formatted_prompt},
         ]
@@ -140,7 +226,7 @@ async def _run_agent(context_path: str) -> None:
         write_count = 0
         files_changed: set[str] = set()
 
-        # 4. Agentic loop
+        # 6. Agentic loop
         for turn in range(MAX_TURNS):
             _current_run = {**_current_run, "turns": turn + 1}
 
@@ -254,7 +340,7 @@ def _on_agent_done(task: asyncio.Task) -> None:
 async def trigger_agent(request_body: AgentTriggerRequest):
     """Trigger an agent run. Returns 202 immediately; work runs in background."""
     async with _agent_lock:
-        if _current_run["status"] == "running":
+        if _current_run["status"] in ("analyzing", "clarifying", "running"):
             return {"accepted": False, "reason": "Agent is already running"}
 
         # Validate context path is within VCI_OUTPUT_DIR
@@ -286,4 +372,7 @@ async def agent_status():
         "turns": _current_run["turns"],
         "timestamp": _current_run["timestamp"],
         "error": _current_run["error"],
+        "clarification": _current_run["clarification"],
+        "progress": _current_run["progress"],
+        "plan": _current_run["plan"],
     }

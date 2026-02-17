@@ -9,6 +9,11 @@ export default defineConfig({
     host: true,
     allowedHosts: true,
     proxy: {
+      '/proxy/api': {
+        target: 'http://localhost:8002',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/proxy/, ''),
+      },
       '/api': {
         target: 'http://localhost:8002',
         changeOrigin: true,

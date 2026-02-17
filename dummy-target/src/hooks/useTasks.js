@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-const API_BASE = '/api/tasks'
+const API_BASE = '/proxy/api/tasks'
 
 export function useTasks(filters = {}) {
   const [tasks, setTasks] = useState([])

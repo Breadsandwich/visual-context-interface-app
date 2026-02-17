@@ -121,6 +121,47 @@ async def _run_analyze(client: AsyncAnthropic, formatted_prompt: str) -> dict[st
     return {"action": "proceed", "plan": result.get("plan", "")}
 
 
+def _build_turn_summary(turn: int, assistant_content: list, tool_results: list[dict], files_changed: set[str]) -> dict[str, Any]:
+    """Build a human-readable turn summary from tool calls and results."""
+    files_read: list[str] = []
+    files_written: list[str] = []
+    searches: list[str] = []
+
+    for block in assistant_content:
+        if block.type != "tool_use":
+            continue
+        name = block.name
+        inp = block.input
+        if name == "read_file":
+            files_read.append(inp.get("path", "unknown"))
+        elif name == "write_file":
+            path = inp.get("path", "unknown")
+            files_written.append(path)
+        elif name in ("search_files", "list_files"):
+            pattern = inp.get("pattern", inp.get("path", ""))
+            searches.append(pattern)
+
+    # Build summary text
+    parts: list[str] = []
+    if files_written:
+        short_paths = [p.split("/")[-1] for p in files_written]
+        parts.append(f"Editing {', '.join(short_paths)}")
+    elif files_read:
+        short_paths = [p.split("/")[-1] for p in files_read]
+        parts.append(f"Reading {', '.join(short_paths)}")
+    elif searches:
+        parts.append(f"Searching: {searches[0]}")
+    else:
+        parts.append("Thinking...")
+
+    return {
+        "turn": turn,
+        "summary": " | ".join(parts),
+        "files_read": files_read,
+        "files_written": files_written,
+    }
+
+
 # ─── Run State ──────────────────────────────────────────────────────
 
 _agent_lock = asyncio.Lock()
@@ -165,6 +206,111 @@ def _write_result(output_dir: str) -> None:
 
 
 # ─── Agentic Loop ───────────────────────────────────────────────────
+
+
+async def _execute_agent_loop(client: AsyncAnthropic, formatted_prompt: str, output_dir: str) -> None:
+    """Run the agentic tool-use loop with per-turn progress tracking."""
+    global _current_run
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": formatted_prompt},
+    ]
+
+    # If there's a user response from clarification, prepend it
+    user_response = _current_run.get("user_response")
+    if user_response:
+        messages[0] = {
+            "role": "user",
+            "content": f"Additional context from the user: {user_response}\n\n{formatted_prompt}",
+        }
+
+    write_count = 0
+    files_changed: set[str] = set()
+
+    try:
+        for turn in range(MAX_TURNS):
+            _current_run = {**_current_run, "turns": turn + 1}
+
+            logger.info("Agent turn %d/%d", turn + 1, MAX_TURNS)
+
+            response = await client.messages.create(
+                model=AGENT_MODEL,
+                max_tokens=MAX_TOKENS_PER_RESPONSE,
+                system=AGENT_SYSTEM_PROMPT,
+                tools=TOOL_DEFINITIONS,
+                messages=messages,
+            )
+
+            assistant_content = response.content
+            messages.append({"role": "assistant", "content": assistant_content})
+
+            if response.stop_reason == "end_turn":
+                final_message = None
+                for block in assistant_content:
+                    if hasattr(block, "text"):
+                        final_message = block.text
+                        break
+                _current_run = {**_current_run, "message": final_message}
+                break
+
+            # Process tool calls
+            tool_results: list[dict[str, Any]] = []
+            for block in assistant_content:
+                if block.type != "tool_use":
+                    continue
+
+                logger.info("Tool call: %s(%s)", block.name, _summarize_input(block.input))
+
+                result_text, write_count = execute_tool(
+                    block.name, block.input, write_count
+                )
+
+                if block.name == "write_file" and not result_text.startswith("Error"):
+                    files_changed.add(block.input.get("path", ""))
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": result_text,
+                })
+
+            # Build and append turn summary
+            summary = _build_turn_summary(turn + 1, assistant_content, tool_results, files_changed)
+            progress = [*_current_run.get("progress", []), summary]
+            _current_run = {
+                **_current_run,
+                "files_changed": sorted(files_changed),
+                "progress": progress,
+            }
+
+            if not tool_results:
+                break
+
+            messages.append({"role": "user", "content": tool_results})
+
+        # Finalize
+        turns = _current_run["turns"]
+        message = _current_run.get("message") or f"Completed in {turns} turns, modified {len(files_changed)} file(s)"
+        _current_run = {
+            **_current_run,
+            "status": "success",
+            "files_changed": sorted(files_changed),
+            "message": message,
+        }
+
+        logger.info("Agent completed: %d turns, %d files changed", turns, len(files_changed))
+
+    except (ValueError, FileNotFoundError) as exc:
+        _current_run = {**_current_run, "status": "error", "error": str(exc)}
+        logger.error("Agent configuration error: %s", exc)
+    except APIError as exc:
+        _current_run = {**_current_run, "status": "error", "error": f"Claude API error: {exc.message}"}
+        logger.error("Claude API error: %s", exc)
+    except Exception:
+        _current_run = {**_current_run, "status": "error", "error": "An unexpected error occurred. Check server logs."}
+        logger.exception("Agent failed with unexpected error")
+    finally:
+        _write_result(output_dir)
 
 
 async def _run_agent(context_path: str) -> None:
@@ -218,98 +364,14 @@ async def _run_agent(context_path: str) -> None:
             "progress": [{"turn": 0, "summary": f"Starting: {plan}" if plan else "Starting work..."}],
         }
 
-        # 5. Build initial messages
-        messages: list[dict[str, Any]] = [
-            {"role": "user", "content": formatted_prompt},
-        ]
-
-        write_count = 0
-        files_changed: set[str] = set()
-
-        # 6. Agentic loop
-        for turn in range(MAX_TURNS):
-            _current_run = {**_current_run, "turns": turn + 1}
-
-            logger.info("Agent turn %d/%d", turn + 1, MAX_TURNS)
-
-            response = await client.messages.create(
-                model=AGENT_MODEL,
-                max_tokens=MAX_TOKENS_PER_RESPONSE,
-                system=AGENT_SYSTEM_PROMPT,
-                tools=TOOL_DEFINITIONS,
-                messages=messages,
-            )
-
-            # Collect text and tool_use blocks from response
-            assistant_content = response.content
-            messages.append({"role": "assistant", "content": assistant_content})
-
-            # Check if we're done (no tool use)
-            if response.stop_reason == "end_turn":
-                # Extract final text message
-                final_message = None
-                for block in assistant_content:
-                    if hasattr(block, "text"):
-                        final_message = block.text
-                        break
-                _current_run = {**_current_run, "message": final_message}
-                break
-
-            # Process tool calls
-            tool_results: list[dict[str, Any]] = []
-            for block in assistant_content:
-                if block.type != "tool_use":
-                    continue
-
-                logger.info("Tool call: %s(%s)", block.name, _summarize_input(block.input))
-
-                result_text, write_count = execute_tool(
-                    block.name, block.input, write_count
-                )
-
-                # Track changed files
-                if block.name == "write_file" and not result_text.startswith("Error"):
-                    files_changed.add(block.input.get("path", ""))
-
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": result_text,
-                })
-
-            if not tool_results:
-                # No tool calls and not end_turn — unexpected, break
-                break
-
-            messages.append({"role": "user", "content": tool_results})
-
-        # 5. Finalize
-        turns = _current_run["turns"]
-        message = _current_run.get("message") or f"Completed in {turns} turns, modified {len(files_changed)} file(s)"
-        _current_run = {
-            **_current_run,
-            "status": "success",
-            "files_changed": sorted(files_changed),
-            "message": message,
-        }
-
-        logger.info(
-            "Agent completed: %d turns, %d files changed",
-            turns,
-            len(files_changed),
-        )
+        await _execute_agent_loop(client, formatted_prompt, output_dir)
 
     except (ValueError, FileNotFoundError) as exc:
         _current_run = {**_current_run, "status": "error", "error": str(exc)}
         logger.error("Agent configuration error: %s", exc)
-    except APIError as exc:
-        _current_run = {**_current_run, "status": "error", "error": f"Claude API error: {exc.message}"}
-        logger.error("Claude API error: %s", exc)
     except Exception:
         _current_run = {**_current_run, "status": "error", "error": "An unexpected error occurred. Check server logs."}
         logger.exception("Agent failed with unexpected error")
-    finally:
-        _write_result(output_dir)
 
 
 def _summarize_input(tool_input: dict) -> str:

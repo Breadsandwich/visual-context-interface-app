@@ -248,9 +248,42 @@ async def agent_status():
                 "filesChanged": data.get("filesChanged", []),
                 "message": data.get("message"),
                 "turns": data.get("turns", 0),
+                "clarification": data.get("clarification"),
+                "progress": data.get("progress", []),
+                "plan": data.get("plan"),
             }
     except Exception:
         return {"status": "unavailable"}
+
+
+class AgentRespondProxyRequest(BaseModel):
+    response: str = Field(..., min_length=1, max_length=2000)
+
+
+@app.post("/api/agent-respond")
+async def agent_respond_proxy(request_body: AgentRespondProxyRequest):
+    """Proxy clarification response to internal agent service."""
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(
+                "http://localhost:8001/agent/respond",
+                json={"response": request_body.response},
+                timeout=5.0,
+            )
+            return resp.json()
+    except httpx.ConnectError:
+        return Response(
+            content=json_module.dumps({"error": "Agent service unavailable"}),
+            status_code=503,
+            media_type="application/json",
+        )
+    except Exception:
+        logger.exception("Agent respond proxy failed")
+        return Response(
+            content=json_module.dumps({"error": "Failed to send response"}),
+            status_code=500,
+            media_type="application/json",
+        )
 
 
 class ApplyEditsRequest(BaseModel):

@@ -19,4 +19,4 @@ RUN chmod +x entrypoint.sh
 
 EXPOSE 3001 8002
 
-CMD ["./entrypoint.sh"]
+CMD ["/bin/sh", "./entrypoint.sh"]

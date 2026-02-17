@@ -760,6 +760,27 @@
   background: rgba(67, 97, 238, 0.04);
 }
 
+/* Compact NumberInput inside corners grid */
+.editor-corners-visual .editor-number-input {
+  flex-direction: column;
+  gap: 0.125rem;
+  align-items: center;
+}
+
+.editor-corners-visual .editor-label-draggable {
+  min-width: unset;
+  font-size: 0.625rem;
+}
+
+.editor-corners-visual .editor-number-input-field {
+  width: 48px;
+}
+
+.editor-corners-visual .editor-input-sm {
+  text-align: center;
+  padding: 0.125rem 0.25rem;
+}
+
 /* ─── Transform origin grid ─── */
 
 .editor-origin-grid {

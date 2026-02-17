@@ -54,6 +54,7 @@ export function EditorPanel({
   const selectedElements = useInspectorStore((s) => s.selectedElements)
 
   const [activeState, setActiveState] = useState<InteractionState>('normal')
+  const [revisionKey, setRevisionKey] = useState(0)
 
   const elementEdits = activeElement ? (pendingEdits[activeElement] ?? []) : []
   const styles = activeElement ? (computedStyles[activeElement] ?? {}) : {}
@@ -141,12 +142,18 @@ export function EditorPanel({
     if (!activeElement) return
     useEditorStore.getState().revertElement(activeElement)
     revertElement(activeElement)
-  }, [activeElement, revertElement])
+    getComputedStyles(activeElement)
+    setRevisionKey((k) => k + 1)
+  }, [activeElement, revertElement, getComputedStyles])
 
   const handleRevertAll = useCallback(() => {
     useEditorStore.getState().revertAll()
     revertEdits()
-  }, [revertEdits])
+    if (activeElement) {
+      getComputedStyles(activeElement)
+    }
+    setRevisionKey((k) => k + 1)
+  }, [revertEdits, activeElement, getComputedStyles])
 
   const handleSave = useCallback(() => {
     const allPending = useEditorStore.getState().pendingEdits
@@ -191,7 +198,7 @@ export function EditorPanel({
         <span className="editor-element-badge">{activeElement}</span>
       </div>
 
-      <div className="editor-panel-content">
+      <div className="editor-panel-content" key={revisionKey}>
         <div className="editor-section">
           <HoverStateEditor
             activeState={activeState}

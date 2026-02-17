@@ -48,7 +48,7 @@ export function FloatingWidget() {
 
         <button
           className={`widget-button ${mode === 'inspection' ? 'active' : ''}`}
-          onClick={() => setMode('inspection')}
+          onClick={() => setMode(mode === 'inspection' ? 'interaction' : 'inspection')}
           title="Inspect Element"
           aria-label="Inspect element mode"
           aria-pressed={mode === 'inspection'}
@@ -71,7 +71,7 @@ export function FloatingWidget() {
 
         <button
           className={`widget-button ${mode === 'screenshot' ? 'active' : ''}`}
-          onClick={() => setMode('screenshot')}
+          onClick={() => setMode(mode === 'screenshot' ? 'interaction' : 'screenshot')}
           title="Screenshot"
           aria-label="Screenshot mode"
           aria-pressed={mode === 'screenshot'}
@@ -86,7 +86,7 @@ export function FloatingWidget() {
 
         <button
           className={`widget-button ${mode === 'edit' ? 'active' : ''}`}
-          onClick={() => setMode('edit')}
+          onClick={() => setMode(mode === 'edit' ? 'interaction' : 'edit')}
           title="Edit Element"
           aria-label="Edit element mode"
           aria-pressed={mode === 'edit'}

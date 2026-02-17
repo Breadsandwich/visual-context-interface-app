@@ -22,6 +22,7 @@ from source_editor import (
     find_css_file,
     extract_classes_from_selector,
 )
+from backend_scanner import scan_backend
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +178,18 @@ async def export_context(request_body: ExportContextRequest):
         vci_dir.mkdir(exist_ok=True)
         history_dir.mkdir(exist_ok=True)
 
-        payload_json = json_module.dumps(request_body.payload, indent=2)
+        # Scan backend structure and inject into payload
+        payload = request_body.payload
+        api_dir = output_base / "dummy-target" / "api"
+        if api_dir.is_dir():
+            try:
+                backend_map = scan_backend(api_dir)
+                if backend_map.get("endpoints") or backend_map.get("models"):
+                    payload = {**payload, "backendMap": backend_map}
+            except Exception:
+                logger.warning("Backend scan failed, continuing without backend map")
+
+        payload_json = json_module.dumps(payload, indent=2)
 
         # Write latest context
         context_path = vci_dir / "context.json"

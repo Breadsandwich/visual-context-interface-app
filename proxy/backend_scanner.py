@@ -47,35 +47,61 @@ def _extract_routes(tree: ast.Module, file_path: str) -> list[dict[str, Any]]:
     return routes
 
 
+def _extract_class_fields(node: ast.ClassDef) -> list[dict[str, str]]:
+    """Extract annotated fields from a class body."""
+    fields: list[dict[str, str]] = []
+    for item in node.body:
+        if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+            type_str = ast.unparse(item.annotation) if item.annotation else "Any"
+            fields.append({"name": item.target.id, "type": type_str})
+    return fields
+
+
+def _resolve_parent_fields(
+    class_node: ast.ClassDef, class_map: dict[str, ast.ClassDef]
+) -> list[dict[str, str]]:
+    """Collect fields from parent classes defined in the same module."""
+    parent_fields: list[dict[str, str]] = []
+    seen_names: set[str] = set()
+
+    for base in class_node.bases:
+        base_name = base.id if isinstance(base, ast.Name) else None
+        if base_name and base_name in class_map:
+            for field in _extract_class_fields(class_map[base_name]):
+                if field["name"] not in seen_names:
+                    parent_fields.append(field)
+                    seen_names.add(field["name"])
+    return parent_fields
+
+
 def _extract_models(tree: ast.Module, file_path: str) -> list[dict[str, Any]]:
-    """Extract SQLModel class definitions with their fields."""
+    """Extract SQLModel table class definitions with their fields (including inherited)."""
     models: list[dict[str, Any]] = []
+
+    # Build a map of all class definitions for parent field resolution
+    class_map: dict[str, ast.ClassDef] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            class_map[node.name] = node
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef):
             continue
-        # Check if any base class name contains 'SQLModel'
-        is_sqlmodel = any(
-            (isinstance(base, ast.Name) and "SQLModel" in base.id)
-            or (isinstance(base, ast.Attribute) and "SQLModel" in base.attr)
-            for base in node.bases
-        )
-        if not is_sqlmodel:
-            continue
-        # Check for table=True in keywords (only table models, not schemas)
-        is_table = any(
+        # Detect SQLModel table classes via table=True keyword.
+        # This is the strongest signal — only SQLModel uses this pattern.
+        has_table_keyword = any(
             isinstance(kw.value, ast.Constant) and kw.value.value is True
             for kw in node.keywords
             if kw.arg == "table"
         )
-        if not is_table:
+        if not has_table_keyword:
             continue
 
-        fields: list[dict[str, str]] = []
-        for item in node.body:
-            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-                type_str = ast.unparse(item.annotation) if item.annotation else "Any"
-                fields.append({"name": item.target.id, "type": type_str})
+        # Collect inherited fields first, then own fields (own fields override)
+        parent_fields = _resolve_parent_fields(node, class_map)
+        own_fields = _extract_class_fields(node)
+        own_names = {f["name"] for f in own_fields}
+        fields = [f for f in parent_fields if f["name"] not in own_names] + own_fields
 
         models.append({
             "name": node.name,

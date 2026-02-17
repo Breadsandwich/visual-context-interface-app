@@ -7,10 +7,13 @@ const AGENT_POLL_INTERVAL = 2000
 const AGENT_POLL_MAX_ATTEMPTS = 150 // 5 minutes max
 
 interface AgentStatusResponse {
-  status: 'idle' | 'running' | 'success' | 'error' | 'unavailable'
+  status: 'idle' | 'analyzing' | 'clarifying' | 'running' | 'success' | 'error' | 'unavailable'
   filesChanged?: string[]
   message?: string | null
   error?: string | null
+  clarification?: { question: string; context: string } | null
+  progress?: Array<{ turn: number; summary: string; files_read?: string[]; files_written?: string[] }>
+  plan?: string | null
 }
 
 async function fetchAgentStatus(): Promise<AgentStatusResponse> {
@@ -33,14 +36,15 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 export function PayloadPreview() {
-  const { generatePayload, selectedElements, screenshotData, userPrompt, uploadedImages, showToast, showPersistentToast, reloadIframe } = useInspectorStore()
+  const { generatePayload, selectedElements, screenshotData, userPrompt, uploadedImages, showToast, showPersistentToast, reloadIframe, setAgentProgress, setAgentClarification, setAgentPlan, clearAgentState, dismissToast } = useInspectorStore()
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     return () => {
       abortRef.current?.abort()
+      clearAgentState()
     }
-  }, [])
+  }, [clearAgentState])
 
   const hasContent = selectedElements.length > 0 || screenshotData || userPrompt || uploadedImages.length > 0
 
@@ -64,21 +68,50 @@ export function PayloadPreview() {
         }
 
         if (status.status === 'success') {
+          clearAgentState()
+          dismissToast()
           showToast('Work done')
           reloadIframe()
           return
         }
 
         if (status.status === 'error') {
+          clearAgentState()
+          dismissToast()
           showToast(`Agent error: ${status.error ?? 'Unknown error'}`)
           return
         }
 
-        if (status.status !== 'running') {
+        if (status.status === 'analyzing') {
+          showPersistentToast('Analyzing your request...')
+          continue
+        }
+
+        if (status.status === 'clarifying' && status.clarification) {
+          dismissToast()
+          setAgentClarification(status.clarification)
+          if (status.plan) setAgentPlan(status.plan)
+          continue
+        }
+
+        if (status.status === 'running') {
+          setAgentClarification(null)
+
+          if (status.progress && status.progress.length > 0) {
+            setAgentProgress(status.progress)
+            if (status.plan) setAgentPlan(status.plan)
+          } else {
+            showPersistentToast('Working...')
+          }
+          continue
+        }
+
+        if (status.status === 'idle') {
           return
         }
       }
 
+      clearAgentState()
       showToast('Agent is still running — check back later')
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return

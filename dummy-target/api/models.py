@@ -28,6 +28,7 @@ class TaskBase(SQLModel):
     priority: TaskPriority = Field(default=TaskPriority.medium)
     due_date: Optional[datetime] = Field(default=None)
     category: Optional[str] = Field(default=None, max_length=100)
+    assignee: Optional[str] = Field(default=None, max_length=100)
 
 
 class Task(TaskBase, table=True):
@@ -53,6 +54,7 @@ class TaskUpdate(SQLModel):
     priority: Optional[TaskPriority] = None
     due_date: Optional[datetime] = None
     category: Optional[str] = Field(default=None, max_length=100)
+    assignee: Optional[str] = Field(default=None, max_length=100)
     issue_flagged: Optional[bool] = None
     issue_resolved: Optional[bool] = None
     issue_description: Optional[str] = None

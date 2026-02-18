@@ -20,23 +20,23 @@ A Dockerized development tool that enables visual DOM inspection and screenshot 
 │                                                                  │
 │  ┌───────────────────────────┐    ┌──────────────────────┐      │
 │  │   visual-context-tool     │    │   dummy-target       │      │
-│  │                           │    │   (React App)        │      │
-│  │  ┌─────────────────────┐  │    │  localhost:3001      │      │
-│  │  │  React Frontend     │  │    └──────────────────────┘      │
-│  │  │  Port 5173          │  │               │                  │
-│  │  └──────────┬──────────┘  │               │                  │
-│  │             │              │               │                  │
-│  │  ┌──────────▼──────────┐  │               │                  │
-│  │  │  FastAPI Proxy      │◄─┼───────────────┘                  │
+│  │                           │    │                      │      │
+│  │  ┌─────────────────────┐  │    │  React App  :3001    │      │
+│  │  │  React Frontend     │  │    │  FastAPI    :8002    │      │
+│  │  │  Port 5173          │  │    │  SQLite DB           │      │
+│  │  └──────────┬──────────┘  │    │  (uvicorn --reload)  │      │
+│  │             │              │    └───────────▲──────────┘      │
+│  │  ┌──────────▼──────────┐  │                │                  │
+│  │  │  FastAPI Proxy      │◄─┼────────────────┘                  │
 │  │  │  Port 8000          │  │  Proxies & injects inspector.js  │
 │  │  └──────────┬──────────┘  │                                  │
-│  │             │ POST        │                                  │
-│  │  ┌──────────▼──────────┐  │                                  │
-│  │  │  Agent Service      │  │                                  │
-│  │  │  Port 8001 (internal)│  │                                  │
-│  │  │  Claude API → tools │  │                                  │
-│  │  └─────────────────────┘  │                                  │
-│  └───────────────────────────┘                                  │
+│  │             │ POST        │         Shared Volume             │
+│  │  ┌──────────▼──────────┐  │     ┌──────────────────┐         │
+│  │  │  Agent Service      │  │     │   vci-output      │         │
+│  │  │  Port 8001 (internal)│──┼────►│   /output ↔ /app  │         │
+│  │  │  Claude API → tools │  │     │  (agent writes    │         │
+│  │  └─────────────────────┘  │     │   trigger reload) │         │
+│  └───────────────────────────┘     └──────────────────┘         │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -321,7 +321,7 @@ Prompt sent to Claude API with four sandboxed tools:
        │
        ▼
 Claude responds with tool_use → agent executes → sends tool_result
-  (repeats up to 25 turns until Claude sends end_turn)
+  (repeats up to 15 turns until Claude sends end_turn)
        │
        ▼
 Agent writes .vci/agent-result.json with status + changed files
@@ -332,6 +332,39 @@ Frontend polls /api/agent-status every 2s
   → shows "Work done" toast on success
   → auto-reloads iframe to display the changes
 ```
+
+### Live Backend & Database Changes
+
+When the agent modifies backend files (models, routes), the changes take effect immediately without a container rebuild. This is possible because of three pieces working together:
+
+**Shared volume mount**: Both the VCI container and the dummy-target container mount the same Docker volume (`vci-output`). The agent writes files to `/output` in the VCI container, which is the same filesystem as `/app` in the dummy-target container.
+
+**Uvicorn hot-reload**: The FastAPI backend runs with `--reload --reload-dir api` (see `entrypoint.sh`). When the agent writes to `api/models.py` or `api/routes/tasks.py`, uvicorn detects the file change and restarts the server process automatically.
+
+**Dev auto-migration**: On every server restart, the FastAPI `lifespan` handler calls `create_db_and_tables()`, which runs `auto_migrate()`. This compares the SQLModel class definitions against the live SQLite schema and applies changes:
+- New columns → `ALTER TABLE ADD COLUMN` (existing data preserved)
+- Removed or type-changed columns → table drop + recreate (data reset, acceptable for dev)
+
+```
+Agent writes api/models.py    (e.g. adds a new field)
+       │
+       ▼
+Uvicorn detects file change   (--reload watches api/ directory)
+       │
+       ▼
+Server restarts               (lifespan hook fires)
+       │
+       ▼
+auto_migrate() runs           (compares model metadata vs SQLite schema)
+       │
+       ▼
+ALTER TABLE ADD COLUMN         (schema updated, data preserved)
+       │
+       ▼
+VCI iframe auto-reloads       (user sees the new field immediately)
+```
+
+The user experience is seamless: click "Send to ADOM", the agent edits both frontend and backend files, the API server hot-reloads with the new schema, and the iframe refreshes to show everything working together.
 
 The prompt formatter uses a multi-pass budget strategy to fit within token limits. It starts with full fidelity (HTML + vision analysis), then progressively strips detail — first HTML, then vision summaries, then images and screenshots, and finally hard-truncates as a last resort. Source file paths, CSS selectors, and user instructions are always preserved since those are what the agent needs to locate and edit code.
 

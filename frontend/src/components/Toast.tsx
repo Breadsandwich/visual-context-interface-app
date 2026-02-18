@@ -120,16 +120,13 @@ function ClarificationToast({ question, onSubmit, onSkip }: {
   )
 }
 
-function ProgressToast({ summary, turn, maxTurns }: {
+function ProgressToast({ summary }: {
   summary: string
-  turn: number
-  maxTurns: number
 }) {
   return (
     <div className="toast-progress-content">
       <SpinnerIcon />
       <span className="toast-message">{summary}</span>
-      <span className="toast-turn-counter">Turn {turn}/{maxTurns}</span>
     </div>
   )
 }
@@ -184,11 +181,7 @@ export function Toast() {
         aria-live="polite"
         style={style}
       >
-        <ProgressToast
-          summary={latest.summary}
-          turn={latest.turn || agentProgress.length}
-          maxTurns={25}
-        />
+        <ProgressToast summary={latest.summary} />
       </div>
     )
   }

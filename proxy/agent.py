@@ -32,7 +32,7 @@ app = FastAPI(title="VCI Agent Service")
 # ─── Configuration ──────────────────────────────────────────────────
 
 AGENT_MODEL = os.getenv("ANTHROPIC_AGENT_MODEL", "claude-sonnet-4-5-20250929")
-MAX_TURNS = 25
+MAX_TURNS = 15
 MAX_TOKENS_PER_RESPONSE = 4096
 
 AGENT_SYSTEM_PROMPT = """You are a full-stack code editing agent. You receive visual context from VCI \

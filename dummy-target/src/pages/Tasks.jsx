@@ -14,6 +14,8 @@ const PRIORITY_OPTIONS = ['low', 'medium', 'high']
 function Tasks() {
   const [statusFilter, setStatusFilter] = useState(null)
   const [showForm, setShowForm] = useState(false)
+  const [showFlagModal, setShowFlagModal] = useState(false)
+  const [selectedTask, setSelectedTask] = useState(null)
   const { tasks, loading, error, createTask, updateTask, deleteTask } = useTasks({
     status: statusFilter,
   })
@@ -30,7 +32,38 @@ function Tasks() {
 
   const handleDelete = async (id) => {
     if (window.confirm('Delete this task?')) {
-      await deleteTask(id)
+      try {
+        await deleteTask(id)
+      } catch (err) {
+        console.error('Failed to delete task:', err)
+        alert('Failed to delete task. Please try again.')
+      }
+    }
+  }
+
+  const handleFlagClick = (task) => {
+    if (task.issue_flagged && !task.issue_resolved) {
+      // If flagged but not resolved, mark as resolved
+      updateTask(task.id, { issue_resolved: true })
+    } else if (task.issue_flagged && task.issue_resolved) {
+      // If flagged and resolved, unflag completely
+      updateTask(task.id, { issue_flagged: false, issue_resolved: false, issue_description: null })
+    } else {
+      // If not flagged, show modal to input issue
+      setSelectedTask(task)
+      setShowFlagModal(true)
+    }
+  }
+
+  const handleFlagSubmit = async (issueDescription) => {
+    if (selectedTask) {
+      await updateTask(selectedTask.id, { 
+        issue_flagged: true, 
+        issue_resolved: false,
+        issue_description: issueDescription 
+      })
+      setShowFlagModal(false)
+      setSelectedTask(null)
     }
   }
 
@@ -69,10 +102,17 @@ function Tasks() {
       ) : (
         <div className="task-list">
           {tasks.map(task => (
-            <div key={task.id} className="task-card">
+            <div key={task.id} className={`task-card ${task.issue_flagged && !task.issue_resolved ? 'task-flagged' : ''} ${task.issue_resolved ? 'task-resolved' : ''}`}>
               <div className="task-card-header">
                 <h3 className="task-title">{task.title}</h3>
                 <div className="task-actions">
+                  <button 
+                    className={`flag-btn ${task.issue_flagged ? 'flagged' : ''}`}
+                    onClick={() => handleFlagClick(task)}
+                    title={task.issue_flagged && !task.issue_resolved ? 'Mark issue as resolved' : task.issue_resolved ? 'Clear flag' : 'Flag issue'}
+                  >
+                    {task.issue_flagged && !task.issue_resolved ? '🚩' : task.issue_resolved ? '✓' : '⚑'}
+                  </button>
                   <button onClick={() => handleStatusCycle(task)}>
                     {task.status === 'done' ? 'Reopen' : task.status === 'in_progress' ? 'Done' : 'Start'}
                   </button>
@@ -84,9 +124,27 @@ function Tasks() {
               {task.description && (
                 <p className="task-description">{task.description}</p>
               )}
+              {task.issue_flagged && task.issue_description && (
+                <div className="task-issue-section">
+                  <div className="task-issue-header">
+                    <span className="issue-icon">⚠️</span>
+                    <strong>Flagged Issue:</strong>
+                  </div>
+                  <p className="task-issue-description">{task.issue_description}</p>
+                </div>
+              )}
               <div className="task-meta">
                 <span className={`badge badge-${task.status}`}>{task.status.replace('_', ' ')}</span>
                 <span className={`badge badge-${task.priority}`}>{task.priority}</span>
+                {task.category && (
+                  <span className="badge badge-category">{task.category}</span>
+                )}
+                {task.issue_flagged && !task.issue_resolved && (
+                  <span className="badge badge-issue">issue flagged</span>
+                )}
+                {task.issue_resolved && (
+                  <span className="badge badge-issue-resolved">issue resolved</span>
+                )}
                 {task.due_date && (
                   <span className="task-due">
                     Due: {new Date(task.due_date).toLocaleDateString()}
@@ -104,6 +162,16 @@ function Tasks() {
           onClose={() => setShowForm(false)}
         />
       )}
+
+      {showFlagModal && (
+        <FlagIssueModal
+          onSubmit={handleFlagSubmit}
+          onClose={() => {
+            setShowFlagModal(false)
+            setSelectedTask(null)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -112,6 +180,7 @@ function CreateTaskModal({ onSubmit, onClose }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState('medium')
+  const [category, setCategory] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -124,6 +193,7 @@ function CreateTaskModal({ onSubmit, onClose }) {
         title: title.trim(),
         description: description.trim() || null,
         priority,
+        category: category.trim() || null,
         due_date: dueDate || null,
       })
     } finally {
@@ -165,6 +235,16 @@ function CreateTaskModal({ onSubmit, onClose }) {
             </select>
           </div>
           <div className="form-group">
+            <label>Category</label>
+            <input
+              type="text"
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              placeholder="e.g., Work, Personal, Urgent..."
+              maxLength={100}
+            />
+          </div>
+          <div className="form-group">
             <label>Due Date</label>
             <input
               type="date"
@@ -178,6 +258,51 @@ function CreateTaskModal({ onSubmit, onClose }) {
             </button>
             <button type="submit" className="submit-btn" disabled={submitting || !title.trim()}>
               {submitting ? 'Creating...' : 'Create Task'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function FlagIssueModal({ onSubmit, onClose }) {
+  const [issueDescription, setIssueDescription] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!issueDescription.trim()) return
+    setSubmitting(true)
+    try {
+      await onSubmit(issueDescription.trim())
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h2>Flag Issue</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Issue Description</label>
+            <textarea
+              value={issueDescription}
+              onChange={e => setIssueDescription(e.target.value)}
+              placeholder="Describe the issue with this task..."
+              rows={4}
+              required
+              autoFocus
+            />
+          </div>
+          <div className="form-actions">
+            <button type="button" className="cancel-btn" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="submit-btn" disabled={submitting || !issueDescription.trim()}>
+              {submitting ? 'Flagging...' : 'Flag Issue'}
             </button>
           </div>
         </form>

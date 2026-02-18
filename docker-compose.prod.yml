@@ -33,10 +33,12 @@ services:
         echo 'Waiting for project source...' &&
         while [ ! -f /app/package.json ]; do sleep 2; done &&
         npm install &&
-        npm run dev
+        pip3 install --no-cache-dir --break-system-packages -r requirements.txt &&
+        sh entrypoint.sh
       "
     ports:
       - "3001"
+      - "8002"
     volumes:
       - vci-output:/app
     networks:

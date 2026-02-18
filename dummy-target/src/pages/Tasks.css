@@ -77,6 +77,16 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
+.task-card.task-flagged {
+  border-left: 4px solid #f56565;
+  background: linear-gradient(to right, rgba(245, 101, 101, 0.05), var(--card-background, #fff) 20%);
+}
+
+.task-card.task-resolved {
+  border-left: 4px solid #48bb78;
+  background: linear-gradient(to right, rgba(72, 187, 120, 0.05), var(--card-background, #fff) 20%);
+}
+
 .task-card-header {
   display: flex;
   justify-content: space-between;
@@ -105,6 +115,22 @@
   transition: all 0.2s;
 }
 
+.task-actions .flag-btn {
+  font-size: 1rem;
+  padding: 0.25rem 0.5rem;
+  border-color: #cbd5e0;
+}
+
+.task-actions .flag-btn:hover {
+  border-color: #f56565;
+  transform: scale(1.1);
+}
+
+.task-actions .flag-btn.flagged {
+  border-color: #f56565;
+  background: rgba(245, 101, 101, 0.1);
+}
+
 .task-actions .delete-btn:hover {
   border-color: #e53e3e;
   color: #e53e3e;
@@ -114,6 +140,34 @@
   color: #666;
   margin: 0.5rem 0;
   font-size: 0.9rem;
+}
+
+.task-issue-section {
+  background: rgba(245, 101, 101, 0.08);
+  border: 1px solid rgba(245, 101, 101, 0.2);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.task-issue-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  color: #c53030;
+  font-size: 0.9rem;
+}
+
+.task-issue-header .issue-icon {
+  font-size: 1.1rem;
+}
+
+.task-issue-description {
+  color: #4a5568;
+  font-size: 0.9rem;
+  margin: 0;
+  line-height: 1.5;
 }
 
 .task-meta {
@@ -139,6 +193,8 @@
 .badge-low { background: #e2e8f0; color: #4a5568; }
 .badge-medium { background: #fefcbf; color: #975a16; }
 .badge-high { background: #fed7d7; color: #c53030; }
+.badge-issue { background: #fed7d7; color: #c53030; }
+.badge-issue-resolved { background: #c6f6d5; color: #276749; }
 
 .task-due {
   font-size: 0.8rem;

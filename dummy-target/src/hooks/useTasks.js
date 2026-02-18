@@ -57,7 +57,10 @@ export function useTasks(filters = {}) {
 
   const deleteTask = useCallback(async (id) => {
     const res = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' })
-    if (!res.ok) throw new Error(`Failed to delete task: ${res.status}`)
+    // 204 No Content is a successful response
+    if (!res.ok && res.status !== 204) {
+      throw new Error(`Failed to delete task: ${res.status}`)
+    }
     setTasks(prev => prev.filter(t => t.id !== id))
   }, [])
 

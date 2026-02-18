@@ -27,6 +27,7 @@ class TaskBase(SQLModel):
     status: TaskStatus = Field(default=TaskStatus.todo)
     priority: TaskPriority = Field(default=TaskPriority.medium)
     due_date: Optional[datetime] = Field(default=None)
+    category: Optional[str] = Field(default=None, max_length=100)
 
 
 class Task(TaskBase, table=True):
@@ -34,6 +35,9 @@ class Task(TaskBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    issue_flagged: bool = Field(default=False)
+    issue_resolved: bool = Field(default=False)
+    issue_description: Optional[str] = Field(default=None)
 
 
 class TaskCreate(TaskBase):
@@ -48,3 +52,7 @@ class TaskUpdate(SQLModel):
     status: Optional[TaskStatus] = None
     priority: Optional[TaskPriority] = None
     due_date: Optional[datetime] = None
+    category: Optional[str] = Field(default=None, max_length=100)
+    issue_flagged: Optional[bool] = None
+    issue_resolved: Optional[bool] = None
+    issue_description: Optional[str] = None

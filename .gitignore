@@ -40,6 +40,9 @@ frontend/public/temp-images/
 # VCI output
 .vci/
 
+# SQLite
+*.db
+
 # Misc
 .env.local
 .env.*.local

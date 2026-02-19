@@ -144,6 +144,18 @@ class TestBuildPreloadedFiles:
 
         assert result.count("#### `src/App.jsx`") == 1
 
+    def test_rejects_path_traversal(self, tmp_path):
+        secret = tmp_path.parent / "secret.txt"
+        secret.write_text("password=hunter2\n")
+
+        contexts = [{"sourceFile": "../../secret.txt", "tagName": "div", "selector": ".x"}]
+
+        with patch.dict(os.environ, {"VCI_OUTPUT_DIR": str(tmp_path)}):
+            result = _build_preloaded_files(contexts, None)
+
+        assert result == ""
+        assert "hunter2" not in result
+
 
 class TestFormatPayloadWithEdits:
     def test_edits_appear_in_full_payload(self):

@@ -121,7 +121,7 @@ async def _run_analyze(client: AsyncAnthropic, formatted_prompt: str) -> dict[st
     return {"action": "proceed", "plan": result.get("plan", "")}
 
 
-def _build_turn_summary(turn: int, assistant_content: list, tool_results: list[dict]) -> dict[str, Any]:
+def _build_turn_summary(turn: int, assistant_content: list) -> dict[str, Any]:
     """Build a human-readable turn summary from tool calls and results."""
     files_read: list[str] = []
     files_written: list[str] = []
@@ -180,6 +180,10 @@ _IDLE_STATE: dict[str, Any] = {
 }
 
 _current_run: dict[str, Any] = {**_IDLE_STATE}
+
+# Internal state for clarification resume — kept separate from _current_run
+# so it's never accidentally serialized or exposed via the status API.
+_pending_clarification: dict[str, str] = {}
 
 
 def _write_result(output_dir: str) -> None:
@@ -275,7 +279,7 @@ async def _execute_agent_loop(client: AsyncAnthropic, formatted_prompt: str, out
                 })
 
             # Build and append turn summary
-            summary = _build_turn_summary(turn + 1, assistant_content, tool_results)
+            summary = _build_turn_summary(turn + 1, assistant_content)
             progress = [*_current_run.get("progress", []), summary]
             _current_run = {
                 **_current_run,
@@ -315,7 +319,7 @@ async def _execute_agent_loop(client: AsyncAnthropic, formatted_prompt: str, out
 
 async def _run_agent(context_path: str) -> None:
     """Execute the agentic loop: read context → analyze → maybe clarify → Claude API → tools → repeat."""
-    global _current_run
+    global _current_run, _pending_clarification
     output_dir = os.getenv("VCI_OUTPUT_DIR", "/output")
     _current_run = {
         **_IDLE_STATE,
@@ -342,6 +346,10 @@ async def _run_agent(context_path: str) -> None:
         analyze_result = await _run_analyze(client, formatted_prompt)
 
         if analyze_result["action"] == "clarify":
+            _pending_clarification = {
+                "context_path": context_path,
+                "formatted_prompt": formatted_prompt,
+            }
             _current_run = {
                 **_current_run,
                 "status": "clarifying",
@@ -349,10 +357,9 @@ async def _run_agent(context_path: str) -> None:
                     "question": analyze_result["question"],
                     "context": analyze_result.get("context", ""),
                 },
-                "_context_path": context_path,
-                "_formatted_prompt": formatted_prompt,
             }
             logger.info("Agent requesting clarification: %s", analyze_result["question"])
+            _write_result(output_dir)
             return
 
         # 4. Proceed to execution
@@ -369,9 +376,11 @@ async def _run_agent(context_path: str) -> None:
     except (ValueError, FileNotFoundError) as exc:
         _current_run = {**_current_run, "status": "error", "error": str(exc)}
         logger.error("Agent configuration error: %s", exc)
+        _write_result(output_dir)
     except Exception:
         _current_run = {**_current_run, "status": "error", "error": "An unexpected error occurred. Check server logs."}
         logger.exception("Agent failed with unexpected error")
+        _write_result(output_dir)
 
 
 def _summarize_input(tool_input: dict) -> str:
@@ -402,17 +411,10 @@ def _on_agent_done(task: asyncio.Task) -> None:
         logger.exception("Agent task failed unexpectedly")
 
 
-async def _resume_agent() -> None:
+async def _resume_agent(context_path: str, formatted_prompt: str) -> None:
     """Resume agent after user responds to clarification."""
     global _current_run
     output_dir = os.getenv("VCI_OUTPUT_DIR", "/output")
-
-    context_path = _current_run.get("_context_path")
-    formatted_prompt = _current_run.get("_formatted_prompt")
-
-    if not context_path or not formatted_prompt:
-        _current_run = {**_current_run, "status": "error", "error": "Missing context for resume"}
-        return
 
     _current_run = {
         **_current_run,
@@ -437,7 +439,7 @@ async def _resume_agent() -> None:
 @app.post("/agent/respond")
 async def agent_respond(request_body: AgentRespondRequest):
     """Accept user's clarification response and resume agent."""
-    global _current_run
+    global _current_run, _pending_clarification
 
     async with _agent_lock:
         if _current_run["status"] != "clarifying":
@@ -447,9 +449,21 @@ async def agent_respond(request_body: AgentRespondRequest):
                 media_type="application/json",
             )
 
+        context_path = _pending_clarification.get("context_path", "")
+        formatted_prompt = _pending_clarification.get("formatted_prompt", "")
+        _pending_clarification = {}
+
+        if not context_path or not formatted_prompt:
+            _current_run = {**_current_run, "status": "error", "error": "Missing context for resume"}
+            return Response(
+                content=json.dumps({"error": "Missing context for resume"}),
+                status_code=500,
+                media_type="application/json",
+            )
+
         _current_run = {**_current_run, "user_response": request_body.response}
 
-        task = asyncio.create_task(_resume_agent())
+        task = asyncio.create_task(_resume_agent(context_path, formatted_prompt))
         task.add_done_callback(_on_agent_done)
 
     return {"accepted": True, "message": "Resuming with your response"}

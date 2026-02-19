@@ -2,12 +2,15 @@
 """SQLite database engine, session factory, and dev auto-migration using SQLModel."""
 
 import logging
+import re
 from enum import Enum
 from pathlib import Path
 
 from sqlalchemy import Column, inspect, text
 from sqlalchemy.dialects.sqlite import dialect as sqlite_dialect
 from sqlmodel import Session, SQLModel, create_engine
+
+_SAFE_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 logger = logging.getLogger("auto_migrate")
 
@@ -91,6 +94,16 @@ def auto_migrate() -> None:
                 type_changed.add(col_name)
 
         if not added and not removed and not type_changed:
+            continue
+
+        # Validate all identifiers before using in raw SQL
+        if not _SAFE_IDENTIFIER.match(table_name):
+            logger.error("Unsafe table name rejected: %s", table_name)
+            continue
+
+        unsafe_cols = [c for c in (added | (db_col_names & model_col_names)) if not _SAFE_IDENTIFIER.match(c)]
+        if unsafe_cols:
+            logger.error("Unsafe column names rejected in '%s': %s", table_name, unsafe_cols)
             continue
 
         # If only additions, use ALTER TABLE ADD COLUMN (preserves data)

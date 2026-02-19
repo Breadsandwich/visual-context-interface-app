@@ -287,15 +287,22 @@ async def agent_respond_proxy(request_body: AgentRespondProxyRequest):
         )
 
 
-class ApplyEditsRequest(BaseModel):
-    edits: list[dict] = Field(..., description="List of element edits to apply")
+class PropertyChange(BaseModel):
+    property: str = Field(..., min_length=1, max_length=100)
+    value: str = Field(..., max_length=500)
+    original: str = Field(default="", max_length=500)
 
-    @field_validator("edits")
-    @classmethod
-    def validate_edits(cls, v: list) -> list:
-        if len(v) > 100:
-            raise ValueError("Too many edits (max 100)")
-        return v
+
+class EditItem(BaseModel):
+    selector: str = Field(..., min_length=1, max_length=500)
+    sourceFile: str | None = None
+    sourceLine: int | None = None
+    componentName: str | None = None
+    changes: list[PropertyChange] = Field(..., min_length=1)
+
+
+class ApplyEditsRequest(BaseModel):
+    edits: list[EditItem] = Field(..., max_length=100)
 
 
 @app.post("/api/apply-edits")
@@ -327,10 +334,10 @@ async def apply_edits_endpoint(request_body: ApplyEditsRequest):
             media_type="application/json",
         )
 
-    deterministic, ai_assisted = partition_edits(request_body.edits)
+    edit_dicts = [e.model_dump(by_alias=True) for e in request_body.edits]
+    deterministic, ai_assisted = partition_edits(edit_dicts)
 
     applied = []
-    failed_edits = []
     for edit in deterministic:
         source_file = edit.get("sourceFile")
         source_line = edit.get("sourceLine")
@@ -370,7 +377,6 @@ async def apply_edits_endpoint(request_body: ApplyEditsRequest):
     return {
         "success": True,
         "applied": applied,
-        "failed": failed_edits,
         "aiAssisted": ai_assisted,
     }
 

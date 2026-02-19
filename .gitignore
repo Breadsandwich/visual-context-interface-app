@@ -44,6 +44,7 @@ frontend/public/temp-images/
 *.db
 
 # Misc
+.env
 .env.local
 .env.*.local
 *.local

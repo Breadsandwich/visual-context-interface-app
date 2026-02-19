@@ -166,9 +166,11 @@ def scan_backend(api_dir: str | Path) -> dict[str, Any]:
         # Extract routes — resolve prefix from APIRouter
         prefix = _find_router_prefix(tree) or ""
         routes = _extract_routes(tree, rel_path)
-        for route in routes:
-            if prefix and not route["path"].startswith(prefix):
-                route["path"] = prefix + route["path"]
+        if prefix:
+            routes = [
+                {**r, "path": prefix + r["path"]} if not r["path"].startswith(prefix) else r
+                for r in routes
+            ]
         all_routes.extend(routes)
 
         # Extract models

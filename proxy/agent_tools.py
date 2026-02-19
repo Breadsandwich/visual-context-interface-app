@@ -37,6 +37,7 @@ def _get_base_dir() -> Path:
 def _resolve_safe_path(user_path: str) -> tuple[Path | None, str | None]:
     """Resolve a user-provided path and verify it stays within the sandbox.
 
+    Checks for symlinks that escape the sandbox to prevent TOCTOU attacks.
     Returns (resolved_path, error_message). One will always be None.
     """
     base = _get_base_dir()
@@ -47,6 +48,16 @@ def _resolve_safe_path(user_path: str) -> tuple[Path | None, str | None]:
 
     if not target.is_relative_to(base):
         return None, "Path outside project directory"
+
+    # Walk each path component to detect symlinks escaping the sandbox
+    current = base / user_path
+    for parent in [current, *current.parents]:
+        if parent == base or not str(parent).startswith(str(base)):
+            break
+        if parent.is_symlink():
+            link_target = parent.resolve()
+            if not link_target.is_relative_to(base):
+                return None, "Symlink escapes project directory"
 
     return target, None
 

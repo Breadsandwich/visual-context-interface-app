@@ -103,6 +103,7 @@
 .task-actions {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
 }
 
 .task-actions button {
@@ -195,6 +196,10 @@
 .badge-high { background: #fed7d7; color: #c53030; }
 .badge-issue { background: #fed7d7; color: #c53030; }
 .badge-issue-resolved { background: #c6f6d5; color: #276749; }
+.badge-category {
+  text-transform: none;
+  letter-spacing: normal;
+}
 
 .task-due {
   font-size: 0.8rem;

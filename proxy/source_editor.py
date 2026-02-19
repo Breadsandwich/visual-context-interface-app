@@ -30,6 +30,28 @@ DETERMINISTIC_PROPERTIES = {
 
 AI_ONLY_PROPERTIES = {"textContent"}
 
+# Characters that could break out of CSS/JSX value contexts
+_DANGEROUS_CSS_CHARS = frozenset(";{}()<>`\\")
+_MAX_CSS_VALUE_LENGTH = 200
+
+
+def validate_css_value(value: str) -> tuple[bool, str]:
+    """Validate a CSS property value is safe to write into source files.
+
+    Returns (is_valid, error_message).
+    """
+    if not value or not value.strip():
+        return False, "Empty value"
+
+    if len(value) > _MAX_CSS_VALUE_LENGTH:
+        return False, f"Value too long ({len(value)} chars, max {_MAX_CSS_VALUE_LENGTH})"
+
+    dangerous_found = [c for c in value if c in _DANGEROUS_CSS_CHARS]
+    if dangerous_found:
+        return False, f"Unsafe characters in value: {dangerous_found}"
+
+    return True, ""
+
 
 def partition_edits(edits: list[dict[str, Any]]) -> tuple[list[dict], list[dict]]:
     """Split edits into deterministic (direct file write) and AI-assisted groups.
@@ -119,6 +141,10 @@ def apply_inline_style_edit(
     Looks for `property: 'value'` or `property: "value"` patterns near the source line.
     Returns True if the edit was applied.
     """
+    is_valid, _ = validate_css_value(new_value)
+    if not is_valid:
+        return False
+
     file_path = project_dir / source_file
     if not file_path.is_file():
         return False
@@ -164,6 +190,10 @@ def apply_css_class_edit(
     the target property. Updates the value if found, or adds the property
     to the first matching rule block if not.
     """
+    is_valid, _ = validate_css_value(new_value)
+    if not is_valid:
+        return False
+
     if not css_file_path.is_file():
         return False
 

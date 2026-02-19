@@ -27,6 +27,16 @@ interface InspectorState {
   agentProgress: Array<{ turn: number; summary: string; files_read?: string[]; files_written?: string[] }>
   agentClarification: { question: string; context: string } | null
   agentPlan: string | null
+  agentWorkers: Record<string, {
+    agentId: string
+    agentName: string
+    status: 'running' | 'success' | 'error' | 'clarifying'
+    progress: Array<{ turn: number; summary: string; files_read?: string[]; files_written?: string[] }>
+    clarification: { question: string; context: string } | null
+    task: string
+  }>
+  orchestratorStatus: 'idle' | 'planning' | 'delegating' | 'running' | 'reviewing' | 'done' | 'error'
+  orchestratorPlan: Record<string, unknown> | null
 
   setMode: (mode: InspectorMode) => void
   toggleSelectedElement: (element: ElementContext) => void
@@ -65,6 +75,9 @@ interface InspectorState {
   setAgentPlan: (plan: string | null) => void
   submitClarification: (response: string) => Promise<void>
   clearAgentState: () => void
+  setAgentWorkers: (workers: InspectorState['agentWorkers']) => void
+  setOrchestratorStatus: (status: InspectorState['orchestratorStatus']) => void
+  setOrchestratorPlan: (plan: InspectorState['orchestratorPlan']) => void
 }
 
 export const useInspectorStore = create<InspectorState>((set, get) => ({
@@ -88,6 +101,9 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   agentProgress: [],
   agentClarification: null,
   agentPlan: null,
+  agentWorkers: {},
+  orchestratorStatus: 'idle' as const,
+  orchestratorPlan: null,
 
   setMode: (mode) => set({ mode }),
 
@@ -316,6 +332,9 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     agentProgress: [],
     agentClarification: null,
     agentPlan: null,
+    agentWorkers: {},
+    orchestratorStatus: 'idle' as const,
+    orchestratorPlan: null,
   })),
 
   reloadIframe: () => set((state) => ({ iframeReloadTrigger: state.iframeReloadTrigger + 1 })),
@@ -350,7 +369,14 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     agentProgress: [],
     agentClarification: null,
     agentPlan: null,
+    agentWorkers: {},
+    orchestratorStatus: 'idle' as const,
+    orchestratorPlan: null,
   }),
+
+  setAgentWorkers: (workers) => set({ agentWorkers: workers }),
+  setOrchestratorStatus: (status) => set({ orchestratorStatus: status }),
+  setOrchestratorPlan: (plan) => set({ orchestratorPlan: plan }),
 
   generatePayload: () => {
     const state = get()

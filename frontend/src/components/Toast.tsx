@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
+import { AgentToastStack } from './AgentToastStack'
 import './Toast.css'
 
 function useWidgetWidth(): number | null {
@@ -132,6 +133,7 @@ function ProgressToast({ summary }: {
 }
 
 export function Toast() {
+  const hasMultiAgentWorkers = useInspectorStore((s) => Object.keys(s.agentWorkers).length > 0)
   const toastMessage = useInspectorStore((s) => s.toastMessage)
   const isToastPersistent = useInspectorStore((s) => s.isToastPersistent)
   const isSidebarOpen = useInspectorStore((s) => s.isSidebarOpen)
@@ -140,6 +142,10 @@ export function Toast() {
   const widgetWidth = useWidgetWidth()
 
   const { submitClarification, dismissToast } = useInspectorStore.getState()
+
+  if (hasMultiAgentWorkers) {
+    return <AgentToastStack />
+  }
 
   // Clarification mode
   if (agentClarification) {

@@ -8,13 +8,29 @@ const AGENT_POLL_MAX_ATTEMPTS = 150 // 5 minutes max
 const IDLE_GRACE_POLLS = 3 // Exit after 3 consecutive idle polls (~6s)
 const UNAVAILABLE_MAX_POLLS = 15 // Give up after ~30s of backend unreachable
 
+interface WorkerStatus {
+  status: 'running' | 'success' | 'error' | 'clarifying'
+  agent_config: string
+  agent_name: string
+  task: string
+  turns: number
+  progress: Array<{ turn: number; summary: string; files_read?: string[]; files_written?: string[] }>
+  clarification: { question: string; context: string } | null
+  files_changed: string[]
+  message: string | null
+  error: string | null
+}
+
 interface AgentStatusResponse {
-  status: 'idle' | 'analyzing' | 'clarifying' | 'running' | 'success' | 'error' | 'unavailable'
-  filesChanged?: string[]
+  status: 'idle' | 'analyzing' | 'clarifying' | 'running' | 'success' | 'error' | 'unavailable' | 'planning' | 'delegating' | 'reviewing'
   message?: string | null
   error?: string | null
-  clarification?: { question: string; context: string } | null
+  run_id?: string
+  orchestrator?: { status: string; plan: Record<string, unknown> } | null
+  workers?: Record<string, WorkerStatus>
+  reviewer?: { status: string; result?: Record<string, unknown> } | null
   progress?: Array<{ turn: number; summary: string; files_read?: string[]; files_written?: string[] }>
+  clarification?: { question: string; context: string } | null
   plan?: string | null
 }
 
@@ -38,7 +54,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 export function PayloadPreview() {
-  const { generatePayload, selectedElements, screenshotData, userPrompt, uploadedImages, showToast, showPersistentToast, reloadIframe, setAgentProgress, setAgentClarification, setAgentPlan, clearAgentState, dismissToast } = useInspectorStore()
+  const { generatePayload, selectedElements, screenshotData, userPrompt, uploadedImages, showToast, showPersistentToast, reloadIframe, setAgentProgress, setAgentClarification, setAgentPlan, clearAgentState, dismissToast, setAgentWorkers, setOrchestratorStatus, setOrchestratorPlan } = useInspectorStore()
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -67,6 +83,27 @@ export function PayloadPreview() {
         const status = await fetchAgentStatus()
 
         if (signal.aborted) return
+
+        // Multi-agent mode: update workers if present
+        const hasWorkers = status.workers && Object.keys(status.workers).length > 0
+        if (hasWorkers) {
+          const workerState: Record<string, { agentId: string; agentName: string; status: 'running' | 'success' | 'error' | 'clarifying'; progress: Array<{ turn: number; summary: string; files_read?: string[]; files_written?: string[] }>; clarification: { question: string; context: string } | null; task: string }> = {}
+          for (const [id, w] of Object.entries(status.workers!)) {
+            workerState[id] = {
+              agentId: id,
+              agentName: w.agent_name,
+              status: w.status,
+              progress: w.progress || [],
+              clarification: w.clarification || null,
+              task: w.task,
+            }
+          }
+          setAgentWorkers(workerState)
+          setOrchestratorStatus(status.status as 'idle' | 'planning' | 'delegating' | 'running' | 'reviewing' | 'done' | 'error')
+          if (status.orchestrator?.plan) {
+            setOrchestratorPlan(status.orchestrator.plan)
+          }
+        }
 
         if (status.status === 'unavailable') {
           unavailableCount++

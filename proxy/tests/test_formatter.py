@@ -1,5 +1,9 @@
+import os
+import tempfile
+from unittest.mock import patch
+
 import pytest
-from formatter import _format_edits, _format_element, format_payload
+from formatter import _build_preloaded_files, _format_edits, _format_element, format_payload
 
 
 class TestFormatEdits:
@@ -58,6 +62,87 @@ class TestFormatElement:
         lines = _format_element(ctx, 0)
         joined = "\n".join(lines)
         assert "Requested edits:" not in joined
+
+
+class TestBuildPreloadedFiles:
+    def test_returns_empty_for_no_files(self):
+        result = _build_preloaded_files(None, None)
+        assert result == ""
+
+    def test_preloads_context_source_files(self, tmp_path):
+        src = tmp_path / "src" / "App.jsx"
+        src.parent.mkdir(parents=True)
+        src.write_text("function App() { return <div /> }\n")
+
+        contexts = [{"sourceFile": "src/App.jsx", "tagName": "div", "selector": ".app"}]
+
+        with patch.dict(os.environ, {"VCI_OUTPUT_DIR": str(tmp_path)}):
+            result = _build_preloaded_files(contexts, None)
+
+        assert "### Pre-loaded Files" in result
+        assert "src/App.jsx" in result
+        assert "function App()" in result
+
+    def test_preloads_backend_map_files(self, tmp_path):
+        models = tmp_path / "api" / "models.py"
+        models.parent.mkdir(parents=True)
+        models.write_text("class Task:\n    name: str\n")
+
+        backend_map = {
+            "endpoints": [],
+            "models": [{"name": "Task", "file": "api/models.py", "line": 1, "fields": []}],
+        }
+
+        with patch.dict(os.environ, {"VCI_OUTPUT_DIR": str(tmp_path)}):
+            result = _build_preloaded_files(None, backend_map)
+
+        assert "api/models.py" in result
+        assert "class Task:" in result
+
+    def test_skips_files_over_line_limit(self, tmp_path):
+        big_file = tmp_path / "src" / "Big.jsx"
+        big_file.parent.mkdir(parents=True)
+        big_file.write_text("\n".join(f"line {i}" for i in range(250)))
+
+        contexts = [{"sourceFile": "src/Big.jsx", "tagName": "div", "selector": ".big"}]
+
+        with patch.dict(os.environ, {"VCI_OUTPUT_DIR": str(tmp_path)}):
+            result = _build_preloaded_files(contexts, None)
+
+        assert result == ""
+
+    def test_respects_token_budget(self, tmp_path):
+        file_a = tmp_path / "a.jsx"
+        file_a.write_text("x" * 19000)  # ~4750 tokens, close to 5000 cap
+
+        file_b = tmp_path / "b.jsx"
+        file_b.write_text("y" * 4000)  # ~1000 tokens, would exceed cap
+
+        contexts = [
+            {"sourceFile": "a.jsx", "tagName": "div", "selector": ".a"},
+            {"sourceFile": "b.jsx", "tagName": "div", "selector": ".b"},
+        ]
+
+        with patch.dict(os.environ, {"VCI_OUTPUT_DIR": str(tmp_path)}):
+            result = _build_preloaded_files(contexts, None)
+
+        assert "a.jsx" in result
+        assert "b.jsx" not in result
+
+    def test_deduplicates_files(self, tmp_path):
+        src = tmp_path / "src" / "App.jsx"
+        src.parent.mkdir(parents=True)
+        src.write_text("export default App\n")
+
+        contexts = [
+            {"sourceFile": "src/App.jsx", "tagName": "div", "selector": ".a"},
+            {"sourceFile": "src/App.jsx", "tagName": "span", "selector": ".b"},
+        ]
+
+        with patch.dict(os.environ, {"VCI_OUTPUT_DIR": str(tmp_path)}):
+            result = _build_preloaded_files(contexts, None)
+
+        assert result.count("#### `src/App.jsx`") == 1
 
 
 class TestFormatPayloadWithEdits:

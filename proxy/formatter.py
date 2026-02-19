@@ -6,6 +6,7 @@ using a multi-pass budget strategy to fit within token limits.
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -252,6 +253,84 @@ def _build_backend_section(backend_map: dict | None) -> str:
         lines.append("")
 
     return "\n".join(lines) + "\n"
+
+
+PRELOAD_MAX_LINES = 200
+PRELOAD_TOKEN_BUDGET = 5000
+
+_LANG_MAP = {
+    ".py": "python", ".jsx": "jsx", ".tsx": "tsx", ".ts": "typescript",
+    ".js": "javascript", ".css": "css", ".html": "html", ".json": "json",
+}
+
+
+def _build_preloaded_files(
+    contexts: list[dict] | None, backend_map: dict | None
+) -> str:
+    """Read referenced files from disk and include contents in the prompt.
+
+    Collects paths from contexts[].sourceFile and backendMap endpoints/models.
+    Skips files over PRELOAD_MAX_LINES or outside VCI_OUTPUT_DIR.
+    Stops adding files once total exceeds PRELOAD_TOKEN_BUDGET.
+    """
+    base = Path(os.getenv("VCI_OUTPUT_DIR", "/output")).resolve()
+
+    # Collect unique file paths
+    paths: list[str] = []
+    seen: set[str] = set()
+
+    for ctx in (contexts or []):
+        sf = ctx.get("sourceFile")
+        if sf and sf not in seen:
+            seen.add(sf)
+            paths.append(sf)
+
+    if backend_map:
+        for ep in backend_map.get("endpoints", []):
+            f = ep.get("file")
+            if f and f not in seen:
+                seen.add(f)
+                paths.append(f)
+        for model in backend_map.get("models", []):
+            f = model.get("file")
+            if f and f not in seen:
+                seen.add(f)
+                paths.append(f)
+
+    if not paths:
+        return ""
+
+    sections: list[str] = []
+    total_tokens = 0
+
+    for rel_path in paths:
+        try:
+            full = (base / rel_path).resolve()
+            if not full.is_relative_to(base) or not full.is_file():
+                continue
+            content = full.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        lines = content.splitlines()
+        if len(lines) > PRELOAD_MAX_LINES:
+            continue
+
+        file_tokens = estimate_tokens(content)
+        if total_tokens + file_tokens > PRELOAD_TOKEN_BUDGET:
+            continue
+
+        total_tokens += file_tokens
+        ext = Path(rel_path).suffix
+        lang = _LANG_MAP.get(ext, "")
+        sections.append(
+            f"#### `{rel_path}` ({len(lines)} lines)\n```{lang}\n{content}\n```\n"
+        )
+
+    if not sections:
+        return ""
+
+    return "### Pre-loaded Files\n\n" + "\n".join(sections) + "\n"
 
 
 # ─── Main Formatter ─────────────────────────────────────────────────

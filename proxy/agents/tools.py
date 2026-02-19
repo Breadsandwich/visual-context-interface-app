@@ -28,6 +28,11 @@ BLOCKED_FILENAMES = frozenset({
 
 BLOCKED_EXTENSIONS = frozenset({
     ".sh", ".bash", ".zsh", ".exe", ".bat", ".cmd",
+    ".md", ".txt", ".log", ".rst",
+})
+
+BLOCKED_PREFIXES = frozenset({
+    "demo_", "verify_", "verification_", "check_",
 })
 
 # ─── Path Validation ────────────────────────────────────────────────
@@ -195,6 +200,14 @@ def execute_write_file(path: str, content: str, write_count: int) -> str:
         return f"Error: Writing to {filename} is not allowed"
     if Path(path).suffix.lower() in BLOCKED_EXTENSIONS:
         return f"Error: Writing files with {Path(path).suffix} extension is not allowed"
+
+    # Block utility/verification scripts by filename prefix
+    stem = Path(path).stem.lower()
+    if any(stem.startswith(prefix) for prefix in BLOCKED_PREFIXES):
+        return (
+            f"Error: Cannot write utility/verification scripts ({Path(path).name}). "
+            f"Only write source code and tests."
+        )
 
     target, error = _resolve_safe_path(path)
     if error:

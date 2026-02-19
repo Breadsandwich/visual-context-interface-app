@@ -1,7 +1,7 @@
 import subprocess
 from unittest.mock import patch, MagicMock
 
-from agents.tools import execute_run_tests, TOOL_DEFINITIONS
+from agents.tools import execute_run_tests, execute_write_file, TOOL_DEFINITIONS
 
 
 class TestRunTestsToolDefinition:
@@ -46,3 +46,54 @@ class TestExecuteRunTests:
         )
         result = execute_run_tests("pytest tests/")
         assert "timed out" in result.lower()
+
+
+class TestWriteFileDocBlock:
+    def test_blocks_markdown_files(self):
+        """write_file rejects .md files."""
+        result = execute_write_file("NOTES.md", "some content", 0)
+        assert result.startswith("Error")
+        assert ".md" in result
+
+    def test_blocks_txt_files(self):
+        """write_file rejects .txt files."""
+        result = execute_write_file("readme.txt", "content", 0)
+        assert result.startswith("Error")
+        assert ".txt" in result
+
+    def test_blocks_log_files(self):
+        """write_file rejects .log files."""
+        result = execute_write_file("debug.log", "content", 0)
+        assert result.startswith("Error")
+        assert ".log" in result
+
+    def test_blocks_rst_files(self):
+        """write_file rejects .rst files."""
+        result = execute_write_file("docs.rst", "content", 0)
+        assert result.startswith("Error")
+        assert ".rst" in result
+
+    def test_blocks_demo_prefix(self):
+        """write_file rejects files starting with 'demo_'."""
+        result = execute_write_file("demo_feature.py", "content", 0)
+        assert result.startswith("Error")
+
+    def test_blocks_verify_prefix(self):
+        """write_file rejects files starting with 'verify_'."""
+        result = execute_write_file("verify_models.py", "content", 0)
+        assert result.startswith("Error")
+
+    def test_blocks_verification_prefix(self):
+        """write_file rejects files starting with 'verification_'."""
+        result = execute_write_file("verification_summary.py", "content", 0)
+        assert result.startswith("Error")
+
+    def test_blocks_check_prefix(self):
+        """write_file rejects files starting with 'check_'."""
+        result = execute_write_file("check_models.py", "content", 0)
+        assert result.startswith("Error")
+
+    def test_allows_test_prefix(self):
+        """write_file allows test_ prefix .py files (these are legitimate tests)."""
+        result = execute_write_file("test_models.py", "content", 0)
+        assert "Cannot write utility" not in result

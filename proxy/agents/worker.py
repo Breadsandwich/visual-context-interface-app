@@ -90,6 +90,7 @@ class WorkerAgent:
         self._system_prompt = config.get("system_prompt", "")
         self._tool_names = set(config.get("tools", []))
         self._test_command = config.get("test_command", "")
+        self._test_commands = config.get("test_commands", None)
         self._max_turns = config.get("max_turns", 15)
         self._max_tokens = config.get("max_tokens", 4096)
         self._lock_manager = lock_manager
@@ -183,6 +184,7 @@ class WorkerAgent:
                         block=block,
                         write_count=write_count,
                         test_command=self._test_command,
+                        test_commands=self._test_commands,
                         lock_manager=self._lock_manager,
                         worker_id=self.worker_id,
                     )
@@ -243,6 +245,7 @@ def _execute_single_tool(
     block: Any,
     write_count: int,
     test_command: str,
+    test_commands: dict[str, str] | None,
     lock_manager: FileLockManager | None,
     worker_id: str,
 ) -> tuple[str, int]:
@@ -251,7 +254,8 @@ def _execute_single_tool(
     Args:
         block: The tool_use content block from the API response.
         write_count: Current cumulative write count for this run.
-        test_command: The test command configured for this agent.
+        test_command: The legacy test command configured for this agent.
+        test_commands: Dict mapping suite names to test commands.
         lock_manager: Optional file lock manager.
         worker_id: This worker's identifier (for lock checks).
 
@@ -260,8 +264,10 @@ def _execute_single_tool(
     """
     if block.name == "run_tests":
         result_text = execute_run_tests(
-            test_command,
-            block.input.get("test_path", ""),
+            test_command=test_command,
+            test_path=block.input.get("test_path", ""),
+            test_commands=test_commands,
+            suite=block.input.get("suite", ""),
         )
         return result_text, write_count
 

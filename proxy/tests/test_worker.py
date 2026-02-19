@@ -399,7 +399,12 @@ class TestWorkerRunTests:
             worker = WorkerAgent(config, worker_id="t-1")
             result = await worker.run("Run the tests")
 
-        mock_run.assert_called_once_with("npm test", "src/")
+        mock_run.assert_called_once_with(
+            test_command="npm test",
+            test_path="src/",
+            test_commands=None,
+            suite="",
+        )
         assert result["status"] == "success"
 
 
@@ -577,3 +582,49 @@ class TestWorkerRunWriteNoLockManager:
             result = await worker.run("Write bad file")
 
         assert "src/Bad.tsx" not in result["files_changed"]
+
+
+# ── WorkerAgent.run — run_tests suite parameter ──────────────────
+
+
+class TestWorkerRunTestsSuite:
+    @pytest.mark.asyncio
+    async def test_suite_param_passed_to_run_tests(self, monkeypatch):
+        """Worker passes suite param from tool input to execute_run_tests."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        config = {
+            "id": "fullstack",
+            "name": "Full-Stack Engineer",
+            "tools": ["read_file", "run_tests"],
+            "test_commands": {"backend": "python -m pytest", "frontend": "npm test"},
+            "max_turns": 10,
+            "max_tokens": 4096,
+        }
+
+        tool_block = _make_tool_use_block(
+            "t1", "run_tests", {"suite": "backend", "test_path": "api/"},
+        )
+        resp1 = MagicMock()
+        resp1.stop_reason = "tool_use"
+        resp1.content = [tool_block]
+
+        resp2 = MagicMock()
+        resp2.stop_reason = "end_turn"
+        resp2.content = [_make_text_block("Tests pass.")]
+
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(side_effect=[resp1, resp2])
+
+        with patch("agents.worker.AsyncAnthropic", return_value=mock_client), \
+             patch("agents.worker.execute_run_tests", return_value="[PASS] Exit code: 0") as mock_run:
+            worker = WorkerAgent(config, worker_id="fs-1")
+            result = await worker.run("Run backend tests")
+
+        mock_run.assert_called_once_with(
+            test_command="",
+            test_path="api/",
+            test_commands={"backend": "python -m pytest", "frontend": "npm test"},
+            suite="backend",
+        )
+        assert result["status"] == "success"

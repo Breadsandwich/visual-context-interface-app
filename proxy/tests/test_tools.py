@@ -97,3 +97,59 @@ class TestWriteFileDocBlock:
         """write_file allows test_ prefix .py files (these are legitimate tests)."""
         result = execute_write_file("test_models.py", "content", 0)
         assert "Cannot write utility" not in result
+
+
+class TestRunTestsSuiteParameter:
+    @patch("agents.tools.subprocess.run")
+    def test_suite_selects_backend_command(self, mock_run):
+        """suite='backend' picks pytest command from test_commands dict."""
+        mock_run.return_value = MagicMock(
+            stdout="5 passed", stderr="", returncode=0,
+        )
+        result = execute_run_tests(
+            test_commands={"backend": "python -m pytest", "frontend": "npm test"},
+            suite="backend",
+        )
+        assert "[PASS]" in result
+        cmd_args = mock_run.call_args[0][0]
+        assert "pytest" in " ".join(cmd_args)
+
+    @patch("agents.tools.subprocess.run")
+    def test_suite_selects_frontend_command(self, mock_run):
+        """suite='frontend' runs npm test."""
+        mock_run.return_value = MagicMock(
+            stdout="Tests passed", stderr="", returncode=0,
+        )
+        result = execute_run_tests(
+            test_commands={"backend": "python -m pytest", "frontend": "npm test"},
+            suite="frontend",
+        )
+        assert "[PASS]" in result
+        cmd_args = mock_run.call_args[0][0]
+        assert "npm" in " ".join(cmd_args)
+
+    @patch("agents.tools.subprocess.run")
+    def test_invalid_suite_returns_error(self, mock_run):
+        """Unknown suite returns error without running anything."""
+        result = execute_run_tests(
+            test_commands={"backend": "pytest", "frontend": "npm test"},
+            suite="database",
+        )
+        assert "Error" in result
+        mock_run.assert_not_called()
+
+    @patch("agents.tools.subprocess.run")
+    def test_legacy_test_command_still_works(self, mock_run):
+        """Backward compat: string test_command still works."""
+        mock_run.return_value = MagicMock(
+            stdout="ok", stderr="", returncode=0,
+        )
+        result = execute_run_tests(test_command="pytest tests/")
+        assert "[PASS]" in result
+
+    @patch("agents.tools.subprocess.run")
+    def test_no_command_returns_error(self, mock_run):
+        """Returns error when no test_command or test_commands provided."""
+        result = execute_run_tests()
+        assert "Error" in result
+        mock_run.assert_not_called()

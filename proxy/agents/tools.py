@@ -150,11 +150,16 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "name": "run_tests",
         "description": (
             "Run the test suite. Use after writing tests or implementation "
-            "to verify your changes. Returns stdout, stderr, and pass/fail status."
+            "to verify your changes. Returns stdout, stderr, and pass/fail status. "
+            "Use the 'suite' parameter to choose 'backend' (pytest) or 'frontend' (npm test)."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
+                "suite": {
+                    "type": "string",
+                    "description": "Which test suite to run: 'backend' or 'frontend'",
+                },
                 "test_path": {
                     "type": "string",
                     "description": "Optional: specific test file or directory to run",
@@ -281,12 +286,34 @@ def execute_search_files(pattern: str) -> str:
         return f"Error searching files: {exc}"
 
 
-def execute_run_tests(test_command: str, test_path: str = "") -> str:
-    """Run the test suite using the configured command."""
+def execute_run_tests(
+    test_command: str = "",
+    test_path: str = "",
+    *,
+    test_commands: dict[str, str] | None = None,
+    suite: str = "",
+) -> str:
+    """Run the test suite using the configured command.
+
+    Supports two modes:
+    - Legacy: test_command (str) -- runs that command directly
+    - Suite: test_commands (dict) + suite (str) -- picks command by suite name
+    """
     import re
     import shlex
 
-    cmd_parts = shlex.split(test_command)
+    # Resolve which command to run
+    if test_commands and suite:
+        if suite not in test_commands:
+            available = ", ".join(sorted(test_commands.keys()))
+            return f"Error: Unknown test suite '{suite}'. Available: {available}"
+        resolved_command = test_commands[suite]
+    elif test_command:
+        resolved_command = test_command
+    else:
+        return "Error: No test command configured"
+
+    cmd_parts = shlex.split(resolved_command)
     if test_path:
         if not re.match(r'^[a-zA-Z0-9_./@:-]+$', test_path):
             return "Error: test_path contains invalid characters"

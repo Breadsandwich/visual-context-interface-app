@@ -99,7 +99,7 @@ export function PayloadPreview() {
             }
           }
           setAgentWorkers(workerState)
-          setOrchestratorStatus(status.status as 'idle' | 'planning' | 'delegating' | 'running' | 'reviewing' | 'done' | 'error')
+          setOrchestratorStatus(status.status as 'idle' | 'planning' | 'delegating' | 'running' | 'reviewing' | 'success' | 'error')
           if (status.orchestrator?.plan) {
             setOrchestratorPlan(status.orchestrator.plan)
           }

@@ -6,6 +6,7 @@ throughout -- self._state is never mutated in-place.
 """
 
 import copy
+import threading
 import uuid
 from datetime import datetime, timezone
 
@@ -39,12 +40,14 @@ class MultiAgentState:
 
     def __init__(self) -> None:
         self._state: dict = _initial_state()
+        self._lock = threading.Lock()
 
     # -- reads ---------------------------------------------------------------
 
     def snapshot(self) -> dict:
         """Return a deep copy of the current state."""
-        return copy.deepcopy(self._state)
+        with self._lock:
+            return copy.deepcopy(self._state)
 
     def all_workers_done(self) -> bool:
         """Return True when every registered worker is 'success' or 'error'.
@@ -62,49 +65,54 @@ class MultiAgentState:
     def start_run(self) -> str:
         """Begin a new run. Returns the generated run_id."""
         run_id = str(uuid.uuid4())
-        self._state = {
-            **self._state,
-            "run_id": run_id,
-            "status": "planning",
-            "timestamp": _now_iso(),
-        }
+        with self._lock:
+            self._state = {
+                **self._state,
+                "run_id": run_id,
+                "status": "planning",
+                "timestamp": _now_iso(),
+            }
         return run_id
 
     def complete_run(self, message: str) -> None:
         """Mark the run as successfully completed."""
-        self._state = {
-            **self._state,
-            "status": "success",
-            "message": message,
-            "timestamp": _now_iso(),
-        }
+        with self._lock:
+            self._state = {
+                **self._state,
+                "status": "success",
+                "message": message,
+                "timestamp": _now_iso(),
+            }
 
     def fail_run(self, error: str) -> None:
         """Mark the run as failed."""
-        self._state = {
-            **self._state,
-            "status": "error",
-            "error": error,
-            "timestamp": _now_iso(),
-        }
+        with self._lock:
+            self._state = {
+                **self._state,
+                "status": "error",
+                "error": error,
+                "timestamp": _now_iso(),
+            }
 
     def reset(self) -> None:
         """Reset to initial idle state."""
-        self._state = _initial_state()
+        with self._lock:
+            self._state = _initial_state()
 
     # -- orchestrator --------------------------------------------------------
 
     def set_orchestrator_plan(self, plan: dict) -> None:
         """Store the orchestrator's plan and transition to 'delegating'."""
-        self._state = {
-            **self._state,
-            "status": "delegating",
-            "orchestrator": {
-                "status": "done",
-                "plan": copy.deepcopy(plan),
-            },
-            "timestamp": _now_iso(),
-        }
+        with self._lock:
+            self._state = {
+                **self._state,
+                "status": "delegating",
+                "orchestrator": {
+                    "status": "done",
+                    "plan": copy.deepcopy(plan),
+                },
+                "timestamp": _now_iso(),
+            }
 
     # -- workers -------------------------------------------------------------
 
@@ -128,114 +136,121 @@ class MultiAgentState:
             "message": None,
             "error": None,
         }
-        self._state = {
-            **self._state,
-            "workers": {
-                **self._state["workers"],
-                worker_id: new_worker,
-            },
-            "timestamp": _now_iso(),
-        }
+        with self._lock:
+            self._state = {
+                **self._state,
+                "workers": {
+                    **self._state["workers"],
+                    worker_id: new_worker,
+                },
+                "timestamp": _now_iso(),
+            }
 
     def update_worker_progress(
         self, worker_id: str, progress_entry: dict
     ) -> None:
         """Append a progress entry to the worker's progress list."""
-        existing = self._state["workers"][worker_id]
-        new_progress = [*existing["progress"], copy.deepcopy(progress_entry)]
-        updated_worker = {
-            **existing,
-            "progress": new_progress,
-            "turns": len(new_progress),
-        }
-        self._state = {
-            **self._state,
-            "workers": {
-                **self._state["workers"],
-                worker_id: updated_worker,
-            },
-            "timestamp": _now_iso(),
-        }
+        with self._lock:
+            existing = self._state["workers"][worker_id]
+            new_progress = [*existing["progress"], copy.deepcopy(progress_entry)]
+            updated_worker = {
+                **existing,
+                "progress": new_progress,
+                "turns": len(new_progress),
+            }
+            self._state = {
+                **self._state,
+                "workers": {
+                    **self._state["workers"],
+                    worker_id: updated_worker,
+                },
+                "timestamp": _now_iso(),
+            }
 
     def set_worker_clarification(
         self, worker_id: str, clarification: dict | None
     ) -> None:
         """Set or clear a clarification request on a worker."""
-        existing = self._state["workers"][worker_id]
-        updated_worker = {
-            **existing,
-            "status": "clarifying" if clarification is not None else "running",
-            "clarification": copy.deepcopy(clarification) if clarification is not None else None,
-        }
-        self._state = {
-            **self._state,
-            "workers": {
-                **self._state["workers"],
-                worker_id: updated_worker,
-            },
-            "timestamp": _now_iso(),
-        }
+        with self._lock:
+            existing = self._state["workers"][worker_id]
+            updated_worker = {
+                **existing,
+                "status": "clarifying" if clarification is not None else "running",
+                "clarification": copy.deepcopy(clarification) if clarification is not None else None,
+            }
+            self._state = {
+                **self._state,
+                "workers": {
+                    **self._state["workers"],
+                    worker_id: updated_worker,
+                },
+                "timestamp": _now_iso(),
+            }
 
     def complete_worker(
         self, worker_id: str, files_changed: list, message: str
     ) -> None:
         """Mark a worker as successfully completed."""
-        existing = self._state["workers"][worker_id]
-        updated_worker = {
-            **existing,
-            "status": "success",
-            "files_changed": list(files_changed),
-            "message": message,
-        }
-        self._state = {
-            **self._state,
-            "workers": {
-                **self._state["workers"],
-                worker_id: updated_worker,
-            },
-            "timestamp": _now_iso(),
-        }
+        with self._lock:
+            existing = self._state["workers"][worker_id]
+            updated_worker = {
+                **existing,
+                "status": "success",
+                "files_changed": list(files_changed),
+                "message": message,
+            }
+            self._state = {
+                **self._state,
+                "workers": {
+                    **self._state["workers"],
+                    worker_id: updated_worker,
+                },
+                "timestamp": _now_iso(),
+            }
 
     def fail_worker(self, worker_id: str, error: str) -> None:
         """Mark a worker as failed."""
-        existing = self._state["workers"][worker_id]
-        updated_worker = {
-            **existing,
-            "status": "error",
-            "error": error,
-        }
-        self._state = {
-            **self._state,
-            "workers": {
-                **self._state["workers"],
-                worker_id: updated_worker,
-            },
-            "timestamp": _now_iso(),
-        }
+        with self._lock:
+            existing = self._state["workers"][worker_id]
+            updated_worker = {
+                **existing,
+                "status": "error",
+                "error": error,
+            }
+            self._state = {
+                **self._state,
+                "workers": {
+                    **self._state["workers"],
+                    worker_id: updated_worker,
+                },
+                "timestamp": _now_iso(),
+            }
 
     # -- reviewer ------------------------------------------------------------
 
     def set_review_status(self, status: str) -> None:
         """Set the review status and transition overall status to 'reviewing'."""
-        existing_reviewer = self._state["reviewer"] or {}
-        self._state = {
-            **self._state,
-            "status": "reviewing",
-            "reviewer": {
-                **existing_reviewer,
-                "status": status,
-            },
-            "timestamp": _now_iso(),
-        }
+        with self._lock:
+            existing_reviewer = self._state["reviewer"] or {}
+            self._state = {
+                **self._state,
+                "status": "reviewing",
+                "reviewer": {
+                    **existing_reviewer,
+                    "status": status,
+                },
+                "timestamp": _now_iso(),
+            }
 
     def set_review_result(self, result: dict) -> None:
         """Store the review result."""
-        existing_reviewer = self._state["reviewer"] or {}
-        self._state = {
-            **self._state,
-            "reviewer": {
-                **existing_reviewer,
-                "result": copy.deepcopy(result),
-            },
-            "timestamp": _now_iso(),
-        }
+        with self._lock:
+            existing_reviewer = self._state["reviewer"] or {}
+            self._state = {
+                **self._state,
+                "reviewer": {
+                    **existing_reviewer,
+                    "result": copy.deepcopy(result),
+                },
+                "timestamp": _now_iso(),
+            }

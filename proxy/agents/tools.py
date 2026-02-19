@@ -270,12 +270,17 @@ def execute_search_files(pattern: str) -> str:
 
 def execute_run_tests(test_command: str, test_path: str = "") -> str:
     """Run the test suite using the configured command."""
-    cmd = test_command
+    import re
+    import shlex
+
+    cmd_parts = shlex.split(test_command)
     if test_path:
-        cmd = f"{cmd} {test_path}"
+        if not re.match(r'^[a-zA-Z0-9_./@:-]+$', test_path):
+            return "Error: test_path contains invalid characters"
+        cmd_parts.append(test_path)
     try:
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True,
+            cmd_parts, capture_output=True, text=True,
             timeout=TEST_TIMEOUT, cwd=str(_get_base_dir()),
         )
         output_parts = []

@@ -35,7 +35,7 @@ interface InspectorState {
     clarification: { question: string; context: string } | null
     task: string
   }>
-  orchestratorStatus: 'idle' | 'planning' | 'delegating' | 'running' | 'reviewing' | 'done' | 'error'
+  orchestratorStatus: 'idle' | 'planning' | 'delegating' | 'running' | 'reviewing' | 'success' | 'error'
   orchestratorPlan: Record<string, unknown> | null
 
   setMode: (mode: InspectorMode) => void

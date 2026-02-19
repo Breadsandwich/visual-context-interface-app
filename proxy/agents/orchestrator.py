@@ -48,6 +48,16 @@ def _parse_plan_response(text: str) -> dict[str, Any] | None:
         logger.warning("Orchestrator plan missing 'tasks' key")
         return None
 
+    required_keys = {"id", "agent", "description"}
+    for i, task in enumerate(plan["tasks"]):
+        if not isinstance(task, dict):
+            logger.warning("Task %d is not a dict", i)
+            return None
+        missing = required_keys - task.keys()
+        if missing:
+            logger.warning("Task %d missing keys: %s", i, missing)
+            return None
+
     return plan
 
 

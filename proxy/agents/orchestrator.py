@@ -116,7 +116,7 @@ class Orchestrator:
 
             # 3. Delegate to workers
             tasks = plan.get("tasks", [])
-            execution = plan.get("execution", "sequential")
+            execution = plan.get("execution", "parallel")
 
             if not tasks:
                 self._state.fail_run("Orchestrator produced no tasks")

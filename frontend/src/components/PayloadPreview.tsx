@@ -4,7 +4,7 @@ import { exportToFile } from '../utils/payloadBuilder'
 import './PayloadPreview.css'
 
 const AGENT_POLL_INTERVAL = 2000
-const AGENT_POLL_MAX_ATTEMPTS = 150 // 5 minutes max
+const AGENT_POLL_MAX_ATTEMPTS = 400 // ~13 minutes max (covers 40-turn workers)
 const IDLE_GRACE_POLLS = 3 // Exit after 3 consecutive idle polls (~6s)
 const UNAVAILABLE_MAX_POLLS = 15 // Give up after ~30s of backend unreachable
 

@@ -238,21 +238,11 @@ async def export_context(request_body: ExportContextRequest):
 
 @app.get("/api/agent-status")
 async def agent_status():
-    """Proxy agent status from internal agent service (sanitized)."""
+    """Proxy agent status from internal agent service."""
     try:
         async with httpx.AsyncClient() as http:
             resp = await http.get("http://localhost:8001/agent/status", timeout=2.0)
-            data = resp.json()
-            return {
-                "status": data.get("status", "unknown"),
-                "filesChanged": data.get("filesChanged", []),
-                "message": data.get("message"),
-                "turns": data.get("turns", 0),
-                "error": data.get("error"),
-                "clarification": data.get("clarification"),
-                "progress": data.get("progress", []),
-                "plan": data.get("plan"),
-            }
+            return resp.json()
     except Exception:
         return {"status": "unavailable"}
 

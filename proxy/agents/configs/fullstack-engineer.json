@@ -1,0 +1,17 @@
+{
+  "id": "fullstack-engineer",
+  "name": "Full-Stack Engineer",
+  "model": "claude-sonnet-4-5-20250929",
+  "system_prompt_file": "prompts/fullstack-engineer.md",
+  "tools": ["read_file", "write_file", "list_directory", "search_files", "run_tests"],
+  "file_scope": {
+    "allowed_patterns": ["api/**", "*.py", "src/**", "*.tsx", "*.jsx", "*.css", "*.ts", "*.js", "*.html", "public/**"],
+    "blocked_patterns": ["*.md", "*.txt", "*.log", "*.rst"]
+  },
+  "test_commands": {
+    "backend": "python -m pytest",
+    "frontend": "npm test"
+  },
+  "max_turns": 40,
+  "max_tokens": 4096
+}

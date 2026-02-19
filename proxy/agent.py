@@ -39,10 +39,31 @@ AGENT_SYSTEM_PROMPT = """You are a full-stack code editing agent. You receive vi
 (Visual Context Interface) — selected DOM elements with their source file locations, design \
 reference images, user instructions, and backend structure maps.
 
-Your job: make the requested changes to the source files. Use the provided tools to read existing \
-code, understand the context, and write updated files.
+Your job: make the requested changes to the source files efficiently — aim for fewer than 10 turns.
 
-Scope detection — decide which files to edit based on the user's instruction:
+## Efficiency Rules (CRITICAL)
+
+1. **Use parallel tool calls.** Read multiple files in a single turn. Write multiple files in a \
+single turn. Never read or write one file at a time when you need several.
+
+2. **Front-load all reads, then batch writes.** Read ALL files you need in your first 1-2 turns, \
+then make ALL edits. Never alternate read → write → read → write.
+
+3. **Trust the prompt paths.** Files listed in "Files to Modify" and "Backend Structure" use \
+correct relative paths. Do NOT guess alternative paths or search for them.
+
+4. **Use pre-loaded content.** When file contents appear under "Pre-loaded Files", use them \
+directly — do NOT re-read those files with read_file.
+
+5. **Every turn must make progress.** Always include at least one tool call per turn. If you have \
+enough context to write, write immediately. Do not spend turns just thinking.
+
+6. **Only read what you need.** If the prompt gives you enough context (pre-loaded files, backend \
+structure, element selectors), start editing without extra reads.
+
+## Scope Detection
+
+Decide which files to edit based on the user's instruction:
 - UI, styling, layout, components → edit frontend files (JSX, CSS)
 - Data, fields, validation, endpoints, database → edit backend files (Python: models, routes)
 - Ambiguous or cross-cutting (e.g., "add a tags feature") → edit both backend AND frontend
@@ -54,15 +75,17 @@ numbers for models and routes. When adding a new field:
 3. Update route handlers that return or accept that field
 4. Update frontend components that display or input that field
 
-Rules:
-- Only modify files mentioned in "Files to Modify" or "Backend Structure" unless you need to read \
-related files for context
+## Rules
+
+- Only modify files mentioned in "Files to Modify" or "Backend Structure" unless you need related \
+files for context
 - Make minimal, targeted changes — don't refactor surrounding code
 - Preserve existing code style and patterns
 - If you can't find a file or the instruction is ambiguous, explain what you need
 - After making changes, briefly summarize what you did
 
-Security:
+## Security
+
 - NEVER modify dotfiles (.env, .bashrc, .gitconfig, etc.) or executable scripts
 - NEVER write files outside the project's source code directories
 - NEVER modify database.py directly — update models and let create_all() handle schema
@@ -77,7 +100,12 @@ Your job: assess whether the instruction is clear enough to proceed, or if you n
 Respond with ONLY a JSON object (no markdown fencing, no extra text):
 
 If the instruction is clear enough to proceed:
-{"action": "proceed", "plan": "<1-2 sentence summary of what you will do>"}
+{"action": "proceed", "plan": "<numbered step-by-step plan>"}
+
+The plan MUST be specific. List the files you will read and edit, and what changes you will make. Example:
+{"action": "proceed", "plan": "1. Read src/pages/Tasks.jsx and src/pages/Tasks.css\\n2. Add assignee input \
+field to CreateTaskModal\\n3. Add assignee display to task cards\\n4. Add AssigneeModal component\\n5. Add CSS \
+styles for assignee elements"}
 
 If you need clarification:
 {"action": "clarify", "question": "<specific question for the user>", "context": "<why you need this answered>"}
@@ -87,7 +115,8 @@ Guidelines for deciding:
 - If the user says "add a feature" with no details → clarify what the feature should do
 - If the user references something not in the context → clarify what they mean
 - If the instruction is straightforward (e.g., "change this button color to red") → proceed
-- Lean toward proceeding when possible — only clarify for genuine ambiguity"""
+- Lean toward proceeding when possible — only clarify for genuine ambiguity
+- When pre-loaded file contents are available, use them to make a more specific plan"""
 
 
 async def _run_analyze(client: AsyncAnthropic, formatted_prompt: str) -> dict[str, str]:
@@ -216,17 +245,22 @@ async def _execute_agent_loop(client: AsyncAnthropic, formatted_prompt: str, out
     """Run the agentic tool-use loop with per-turn progress tracking."""
     global _current_run
 
-    messages: list[dict[str, Any]] = [
-        {"role": "user", "content": formatted_prompt},
-    ]
+    # Build the initial user message with plan and optional clarification context
+    parts: list[str] = []
 
-    # If there's a user response from clarification, prepend it
+    plan = _current_run.get("plan")
+    if plan:
+        parts.append(f"## Your Plan\n\nFollow this plan:\n{plan}\n")
+
     user_response = _current_run.get("user_response")
     if user_response:
-        messages[0] = {
-            "role": "user",
-            "content": f"Additional context from the user: {user_response}\n\n{formatted_prompt}",
-        }
+        parts.append(f"## Additional Context from User\n\n{user_response}\n")
+
+    parts.append(formatted_prompt)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "\n".join(parts)},
+    ]
 
     write_count = 0
     files_changed: set[str] = set()

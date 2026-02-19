@@ -67,6 +67,10 @@ function Tasks() {
     }
   }
 
+  const handleAssigneeChange = async (taskId, newAssignee) => {
+    await updateTask(taskId, { assignee: newAssignee || null })
+  }
+
   return (
     <div className="tasks">
       <div className="tasks-header">
@@ -102,56 +106,14 @@ function Tasks() {
       ) : (
         <div className="task-list">
           {tasks.map(task => (
-            <div key={task.id} className={`task-card ${task.issue_flagged && !task.issue_resolved ? 'task-flagged' : ''} ${task.issue_resolved ? 'task-resolved' : ''}`}>
-              <div className="task-card-header">
-                <h3 className="task-title">{task.title}</h3>
-                <div className="task-actions">
-                  <button 
-                    className={`flag-btn ${task.issue_flagged ? 'flagged' : ''}`}
-                    onClick={() => handleFlagClick(task)}
-                    title={task.issue_flagged && !task.issue_resolved ? 'Mark issue as resolved' : task.issue_resolved ? 'Clear flag' : 'Flag issue'}
-                  >
-                    {task.issue_flagged && !task.issue_resolved ? '🚩' : task.issue_resolved ? '✓' : '⚑'}
-                  </button>
-                  <button onClick={() => handleStatusCycle(task)}>
-                    {task.status === 'done' ? 'Reopen' : task.status === 'in_progress' ? 'Done' : 'Start'}
-                  </button>
-                  <button className="delete-btn" onClick={() => handleDelete(task.id)}>
-                    Delete
-                  </button>
-                </div>
-              </div>
-              {task.description && (
-                <p className="task-description">{task.description}</p>
-              )}
-              {task.issue_flagged && task.issue_description && (
-                <div className="task-issue-section">
-                  <div className="task-issue-header">
-                    <span className="issue-icon">⚠️</span>
-                    <strong>Flagged Issue:</strong>
-                  </div>
-                  <p className="task-issue-description">{task.issue_description}</p>
-                </div>
-              )}
-              <div className="task-meta">
-                <span className={`badge badge-${task.status}`}>{task.status.replace('_', ' ')}</span>
-                <span className={`badge badge-${task.priority}`}>{task.priority}</span>
-                {task.category && (
-                  <span className="badge badge-category">{task.category}</span>
-                )}
-                {task.issue_flagged && !task.issue_resolved && (
-                  <span className="badge badge-issue">issue flagged</span>
-                )}
-                {task.issue_resolved && (
-                  <span className="badge badge-issue-resolved">issue resolved</span>
-                )}
-                {task.due_date && (
-                  <span className="task-due">
-                    Due: {new Date(task.due_date).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
-            </div>
+            <TaskCard 
+              key={task.id} 
+              task={task}
+              onStatusCycle={handleStatusCycle}
+              onDelete={handleDelete}
+              onFlagClick={handleFlagClick}
+              onAssigneeChange={handleAssigneeChange}
+            />
           ))}
         </div>
       )}
@@ -176,11 +138,115 @@ function Tasks() {
   )
 }
 
+function TaskCard({ task, onStatusCycle, onDelete, onFlagClick, onAssigneeChange }) {
+  const [isEditingAssignee, setIsEditingAssignee] = useState(false)
+  const [assigneeValue, setAssigneeValue] = useState(task.assignee || '')
+
+  const handleAssigneeClick = () => {
+    setIsEditingAssignee(true)
+    setAssigneeValue(task.assignee || '')
+  }
+
+  const handleAssigneeSave = async () => {
+    const trimmed = assigneeValue.trim()
+    if (trimmed !== (task.assignee || '')) {
+      await onAssigneeChange(task.id, trimmed)
+    }
+    setIsEditingAssignee(false)
+  }
+
+  const handleAssigneeKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleAssigneeSave()
+    } else if (e.key === 'Escape') {
+      setIsEditingAssignee(false)
+      setAssigneeValue(task.assignee || '')
+    }
+  }
+
+  return (
+    <div className={`task-card ${task.issue_flagged && !task.issue_resolved ? 'task-flagged' : ''} ${task.issue_resolved ? 'task-resolved' : ''}`}>
+      <div className="task-card-header">
+        <h3 className="task-title">{task.title}</h3>
+        <div className="task-actions">
+          <button 
+            className={`flag-btn ${task.issue_flagged ? 'flagged' : ''}`}
+            onClick={() => onFlagClick(task)}
+            title={task.issue_flagged && !task.issue_resolved ? 'Mark issue as resolved' : task.issue_resolved ? 'Clear flag' : 'Flag issue'}
+          >
+            {task.issue_flagged && !task.issue_resolved ? '🚩' : task.issue_resolved ? '✓' : '⚑'}
+          </button>
+          <button onClick={() => onStatusCycle(task)}>
+            {task.status === 'done' ? 'Reopen' : task.status === 'in_progress' ? 'Done' : 'Start'}
+          </button>
+          <button className="delete-btn" onClick={() => onDelete(task.id)}>
+            Delete
+          </button>
+        </div>
+      </div>
+      {task.description && (
+        <p className="task-description">{task.description}</p>
+      )}
+      {task.issue_flagged && task.issue_description && (
+        <div className="task-issue-section">
+          <div className="task-issue-header">
+            <span className="issue-icon">⚠️</span>
+            <strong>Flagged Issue:</strong>
+          </div>
+          <p className="task-issue-description">{task.issue_description}</p>
+        </div>
+      )}
+      <div className="task-meta">
+        <span className={`badge badge-${task.status}`}>{task.status.replace('_', ' ')}</span>
+        <span className={`badge badge-${task.priority}`}>{task.priority}</span>
+        {task.category && (
+          <span className="badge badge-category">{task.category}</span>
+        )}
+        {task.issue_flagged && !task.issue_resolved && (
+          <span className="badge badge-issue">issue flagged</span>
+        )}
+        {task.issue_resolved && (
+          <span className="badge badge-issue-resolved">issue resolved</span>
+        )}
+        {task.due_date && (
+          <span className="task-due">
+            Due: {new Date(task.due_date).toLocaleDateString()}
+          </span>
+        )}
+      </div>
+      {/* Assignee Section */}
+      <div className="task-assignee-section">
+        {isEditingAssignee ? (
+          <input
+            type="text"
+            className="assignee-inline-edit"
+            value={assigneeValue}
+            onChange={(e) => setAssigneeValue(e.target.value)}
+            onBlur={handleAssigneeSave}
+            onKeyDown={handleAssigneeKeyDown}
+            placeholder="Assign to..."
+            autoFocus
+          />
+        ) : (
+          <div className="task-assignee" onClick={handleAssigneeClick}>
+            <span className="assignee-icon">👤</span>
+            <span className="assignee-name">
+              {task.assignee || 'Unassigned'}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function CreateTaskModal({ onSubmit, onClose }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState('medium')
   const [category, setCategory] = useState('')
+  const [assignee, setAssignee] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -194,6 +260,7 @@ function CreateTaskModal({ onSubmit, onClose }) {
         description: description.trim() || null,
         priority,
         category: category.trim() || null,
+        assignee: assignee.trim() || null,
         due_date: dueDate || null,
       })
     } finally {
@@ -241,6 +308,16 @@ function CreateTaskModal({ onSubmit, onClose }) {
               value={category}
               onChange={e => setCategory(e.target.value)}
               placeholder="e.g., Work, Personal, Urgent..."
+              maxLength={100}
+            />
+          </div>
+          <div className="form-group">
+            <label>Assignee</label>
+            <input
+              type="text"
+              value={assignee}
+              onChange={e => setAssignee(e.target.value)}
+              placeholder="Assign to..."
               maxLength={100}
             />
           </div>

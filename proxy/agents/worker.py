@@ -137,6 +137,7 @@ class WorkerAgent:
         tools = self.get_tools()
         write_count = 0
         files_changed: set[str] = set()
+        file_write_counts: dict[str, int] = {}  # track per-file writes
 
         try:
             for turn in range(self._max_turns):
@@ -193,7 +194,18 @@ class WorkerAgent:
                     if block.name == "write_file" and not result_text.startswith(
                         "Error"
                     ):
-                        files_changed.add(block.input.get("path", ""))
+                        written_path = block.input.get("path", "")
+                        files_changed.add(written_path)
+                        file_write_counts[written_path] = (
+                            file_write_counts.get(written_path, 0) + 1
+                        )
+                        if file_write_counts[written_path] >= 3:
+                            result_text += (
+                                f"\n\nWarning: You have written to '{written_path}' "
+                                f"{file_write_counts[written_path]} times. "
+                                f"Stop rewriting the same file. Read it back to "
+                                f"verify your changes, then move on."
+                            )
 
                     tool_results.append(
                         {

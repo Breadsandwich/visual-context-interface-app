@@ -587,6 +587,64 @@ class TestWorkerRunWriteNoLockManager:
         assert "src/Bad.tsx" not in result["files_changed"]
 
 
+# ── WorkerAgent.run — repeated write warning ─────────────────────
+
+
+class TestWorkerRepeatedWriteWarning:
+    @pytest.mark.asyncio
+    async def test_warns_on_third_write_to_same_file(self, fullstack_config, monkeypatch):
+        """Worker appends warning when same file written 3+ times."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        responses = []
+        for i in range(3):
+            tool_block = _make_tool_use_block(
+                f"t{i}", "write_file", {"path": "src/App.tsx", "content": f"v{i}"}
+            )
+            resp = MagicMock()
+            resp.stop_reason = "tool_use"
+            resp.content = [tool_block]
+            responses.append(resp)
+
+        # Final end_turn
+        resp_end = MagicMock()
+        resp_end.stop_reason = "end_turn"
+        resp_end.content = [_make_text_block("Done.")]
+        responses.append(resp_end)
+
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(side_effect=responses)
+
+        tool_results_seen: list[str] = []
+
+        original_execute_tool = None
+
+        def mock_execute(name, inp, wc):
+            return (f"Successfully wrote to {inp.get('path', '')}", wc + 1)
+
+        with patch("agents.worker.AsyncAnthropic", return_value=mock_client), \
+             patch("agents.worker.execute_tool", side_effect=mock_execute):
+            worker = WorkerAgent(fullstack_config, worker_id="fs-1")
+            result = await worker.run("Edit app")
+
+        # All calls share the same messages list (passed by reference).
+        # Final list: [user, asst(t0), user(res0), asst(t1), user(res1),
+        #              asst(t2), user(res2+warning), asst(end_turn)]
+        calls = mock_client.messages.create.call_args_list
+        assert len(calls) == 4  # 3 tool_use rounds + 1 end_turn
+
+        # Index 6 is the user message with the 3rd write's tool result.
+        messages = calls[0].kwargs["messages"]
+        third_write_result_msg = messages[6]
+        assert third_write_result_msg["role"] == "user"
+        tool_result_content = third_write_result_msg["content"][0]["content"]
+        assert "Warning" in tool_result_content
+        assert "3 times" in tool_result_content
+
+        assert result["status"] == "success"
+        assert "src/App.tsx" in result["files_changed"]
+
+
 # ── WorkerAgent.run — run_tests suite parameter ──────────────────
 
 

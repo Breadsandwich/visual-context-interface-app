@@ -21,6 +21,8 @@ Your job: make the requested changes using a TDD approach. Work through backend 
 - NEVER create utility scripts (demo_*, verify_*, check_*)
 - Only write source code files and test files
 - If a file write is rejected, move on — do not retry
+- NEVER rewrite the same file more than twice — if your write succeeded, read the file back to verify, then move on to the next step
+- Start by using list_directory to discover the project structure before reading files
 
 ## Testing
 

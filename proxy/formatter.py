@@ -47,6 +47,24 @@ def _format_source_ref(ctx: dict) -> Optional[str]:
     return f"{source_file}{line}"
 
 
+def _escape_backticks(s: str) -> str:
+    """Escape backticks to prevent breaking markdown inline code."""
+    return str(s).replace("`", "'")
+
+
+def _format_edits(saved_edits: list[dict] | None) -> list[str]:
+    """Format saved edits for an element (mirrors JS formatEdits)."""
+    if not saved_edits:
+        return []
+    lines = ["   - Requested edits:"]
+    for edit in saved_edits:
+        prop = _escape_backticks(edit.get("property", ""))
+        orig = _escape_backticks(edit.get("original", ""))
+        val = _escape_backticks(edit.get("value", ""))
+        lines.append(f"     - `{prop}`: `{orig}` -> `{val}`")
+    return lines
+
+
 def _format_element(ctx: dict, index: int) -> list[str]:
     lines: list[str] = []
     tag = f"<{ctx.get('tagName', 'unknown')}>"
@@ -62,6 +80,8 @@ def _format_element(ctx: dict, index: int) -> list[str]:
 
     if ctx.get("elementPrompt"):
         lines.append(f"   - Instruction: {ctx['elementPrompt']}")
+
+    lines.extend(_format_edits(ctx.get("savedEdits")))
 
     return lines
 
@@ -187,6 +207,53 @@ def _build_files_to_modify(contexts: Optional[list[dict]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _build_backend_section(backend_map: dict | None) -> str:
+    """Format backend structure map for the agent prompt."""
+    if not backend_map:
+        return ""
+
+    endpoints = backend_map.get("endpoints", [])
+    models = backend_map.get("models", [])
+    db = backend_map.get("database")
+
+    if not endpoints and not models:
+        return ""
+
+    lines = ["### Backend Structure\n"]
+
+    if endpoints:
+        lines.append("**Endpoints:**")
+        for ep in endpoints:
+            method = ep.get("method", "?")
+            path = ep.get("path", "?")
+            file = ep.get("file", "?")
+            line = ep.get("line", "")
+            loc = f"{file}:{line}" if line else file
+            lines.append(f"- {method} `{path}` -> `{loc}`")
+        lines.append("")
+
+    if models:
+        lines.append("**Models:**")
+        for model in models:
+            name = model.get("name", "?")
+            file = model.get("file", "?")
+            line = model.get("line", "")
+            loc = f"{file}:{line}" if line else file
+            fields = model.get("fields", [])
+            field_summary = ", ".join(
+                f"{f['name']} ({f['type']})" for f in fields
+            )
+            lines.append(f"- **{name}** (`{loc}`): {field_summary}")
+        lines.append("")
+
+    if db:
+        engine = db.get("engine", "unknown")
+        lines.append(f"**Database:** {engine}")
+        lines.append("")
+
+    return "\n".join(lines) + "\n"
+
+
 # ─── Main Formatter ─────────────────────────────────────────────────
 
 def format_payload(payload: dict, budget: int = DEFAULT_TOKEN_BUDGET) -> str:
@@ -208,25 +275,30 @@ def format_payload(payload: dict, budget: int = DEFAULT_TOKEN_BUDGET) -> str:
     images_full = _build_images(payload.get("externalImages"), True)
     images_lite = _build_images(payload.get("externalImages"), False)
     screenshot = _build_screenshot(payload)
+    backend = _build_backend_section(payload.get("backendMap"))
     files_to_modify = _build_files_to_modify(payload.get("contexts"))
 
-    full = header + elements_full + images_full + screenshot + files_to_modify
+    full = header + elements_full + images_full + screenshot + backend + files_to_modify
     if len(full) <= max_chars:
         return full
 
-    pass2 = header + elements_lite + images_full + screenshot + files_to_modify
+    pass2 = header + elements_lite + images_full + screenshot + backend + files_to_modify
     if len(pass2) <= max_chars:
         return pass2
 
-    pass3 = header + elements_lite + images_lite + screenshot + files_to_modify
+    pass3 = header + elements_lite + images_lite + screenshot + backend + files_to_modify
     if len(pass3) <= max_chars:
         return pass3
 
-    pass4 = header + elements_lite + files_to_modify
+    pass4 = header + elements_lite + backend + files_to_modify
     if len(pass4) <= max_chars:
         return pass4
 
-    return truncate_to_token_budget(pass4, budget)
+    pass5 = header + elements_lite + files_to_modify
+    if len(pass5) <= max_chars:
+        return pass5
+
+    return truncate_to_token_budget(pass5, budget)
 
 
 def validate_payload(raw: Any) -> dict:
@@ -245,6 +317,7 @@ def validate_payload(raw: Any) -> dict:
         "visualAnalysis": raw.get("visualAnalysis") or None,
         "visualPrompt": raw.get("visualPrompt") if isinstance(raw.get("visualPrompt"), str) else None,
         "timestamp": raw.get("timestamp"),
+        "backendMap": raw.get("backendMap") if isinstance(raw.get("backendMap"), dict) else None,
     }
 
 
@@ -258,3 +331,39 @@ def read_context_file(file_path: str | Path) -> dict:
         )
     raw = path.read_text(encoding="utf-8")
     return json.loads(raw)
+
+
+def format_edit_instructions(ai_edits: list[dict]) -> str:
+    """Convert structured edit data into precise, unambiguous agent instructions."""
+    lines = ["# Direct Edit Instructions", ""]
+    lines.append(
+        "The user has made specific visual edits that need to be applied to source code."
+    )
+    lines.append(
+        "Apply EXACTLY these changes - do not interpret or expand them."
+    )
+    lines.append("")
+
+    for edit in ai_edits:
+        selector = edit.get("selector", "unknown")
+        source = edit.get("sourceFile")
+        line_num = edit.get("sourceLine")
+        component = edit.get("componentName")
+
+        location = ""
+        if source:
+            location = f" in {source}"
+            if line_num:
+                location += f":{line_num}"
+            if component:
+                location += f" ({component})"
+
+        lines.append(f"## Element: `{_escape_backticks(selector)}`{location}")
+        for change in edit.get("changes", []):
+            prop = _escape_backticks(change.get("property", ""))
+            old = _escape_backticks(change.get("original", ""))
+            new = _escape_backticks(change.get("value", ""))
+            lines.append(f"- Change `{prop}` from `{old}` to `{new}`")
+        lines.append("")
+
+    return "\n".join(lines)

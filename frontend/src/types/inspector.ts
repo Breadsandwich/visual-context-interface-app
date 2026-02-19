@@ -2,7 +2,7 @@
  * TypeScript interfaces for Visual Context Interface
  */
 
-export type InspectorMode = 'interaction' | 'inspection' | 'screenshot'
+export type InspectorMode = 'interaction' | 'inspection' | 'screenshot' | 'edit'
 
 export interface ElementContext {
   tagName: string
@@ -61,8 +61,8 @@ export interface UploadedImage {
 
 export interface InspectorEvent {
   type: 'INSPECTOR_EVENT'
-  action: 'ELEMENT_SELECTED' | 'SCREENSHOT_CAPTURED' | 'ROUTE_CHANGED' | 'READY' | 'SCREENSHOT_ERROR'
-  payload: ElementSelectedPayload | ScreenshotPayload | RouteChangedPayload | ReadyPayload | ScreenshotErrorPayload
+  action: 'ELEMENT_SELECTED' | 'SCREENSHOT_CAPTURED' | 'ROUTE_CHANGED' | 'READY' | 'SCREENSHOT_ERROR' | 'COMPUTED_STYLES' | 'EDIT_ELEMENT_CLICKED'
+  payload: ElementSelectedPayload | ScreenshotPayload | RouteChangedPayload | ReadyPayload | ScreenshotErrorPayload | ComputedStylesPayload
 }
 
 export interface ElementSelectedPayload {
@@ -94,7 +94,7 @@ export interface ScreenshotErrorPayload {
 
 export interface InspectorCommand {
   type: 'INSPECTOR_COMMAND'
-  action: 'SET_MODE' | 'CAPTURE_SCREENSHOT' | 'CAPTURE_ELEMENT' | 'CLEAR_SELECTION' | 'GET_ROUTE'
+  action: 'SET_MODE' | 'CAPTURE_SCREENSHOT' | 'CAPTURE_ELEMENT' | 'CLEAR_SELECTION' | 'GET_ROUTE' | 'APPLY_EDIT' | 'REVERT_EDITS' | 'REVERT_ELEMENT' | 'GET_COMPUTED_STYLES'
   payload?: {
     mode?: InspectorMode
     region?: {
@@ -104,6 +104,8 @@ export interface InspectorCommand {
       height: number
     }
     selector?: string
+    property?: string
+    value?: string
   }
 }
 
@@ -118,6 +120,7 @@ export interface ContextEntry {
   sourceLine: number | null
   componentName: string | null
   linkedImages: ExternalImagePayload[]
+  savedEdits: PropertyEdit[]
 }
 
 export interface OutputPayload {
@@ -128,4 +131,23 @@ export interface OutputPayload {
   visualAnalysis: VisionAnalysis | null
   prompt: string
   timestamp: string
+}
+
+export interface PropertyEdit {
+  property: string
+  value: string
+  original: string
+}
+
+export interface ElementEdits {
+  selector: string
+  sourceFile: string | null
+  sourceLine: number | null
+  componentName: string | null
+  changes: PropertyEdit[]
+}
+
+export interface ComputedStylesPayload {
+  selector: string
+  styles: Record<string, string>
 }

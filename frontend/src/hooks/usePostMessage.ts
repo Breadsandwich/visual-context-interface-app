@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
+import { useEditorStore } from '../stores/editorStore'
 import type { InspectorEvent, InspectorCommand, InspectorMode, ElementContext } from '../types/inspector'
 
 // Type guard for InspectorEvent
@@ -91,6 +92,21 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
             setCurrentRoute(data.payload.route)
           }
           break
+
+        case 'COMPUTED_STYLES':
+          if (data.payload && 'selector' in data.payload && 'styles' in data.payload) {
+            const { setComputedStyles } = useEditorStore.getState()
+            setComputedStyles(data.payload.selector as string, data.payload.styles as Record<string, string>)
+          }
+          break
+
+        case 'EDIT_ELEMENT_CLICKED':
+          if (data.payload && 'selector' in data.payload) {
+            const { setActiveElement } = useEditorStore.getState()
+            setActiveElement(data.payload.selector as string)
+            useInspectorStore.getState().openSidebar()
+          }
+          break
       }
     }
 
@@ -155,11 +171,46 @@ export function usePostMessage(iframeRef: React.RefObject<HTMLIFrameElement | nu
     })
   }, [sendCommand])
 
+  const applyEdit = useCallback((selector: string, property: string, value: string) => {
+    sendCommand({
+      type: 'INSPECTOR_COMMAND',
+      action: 'APPLY_EDIT',
+      payload: { selector, property, value }
+    })
+  }, [sendCommand])
+
+  const revertEdits = useCallback(() => {
+    sendCommand({
+      type: 'INSPECTOR_COMMAND',
+      action: 'REVERT_EDITS'
+    })
+  }, [sendCommand])
+
+  const revertElement = useCallback((selector: string) => {
+    sendCommand({
+      type: 'INSPECTOR_COMMAND',
+      action: 'REVERT_ELEMENT',
+      payload: { selector }
+    })
+  }, [sendCommand])
+
+  const getComputedStyles = useCallback((selector: string) => {
+    sendCommand({
+      type: 'INSPECTOR_COMMAND',
+      action: 'GET_COMPUTED_STYLES',
+      payload: { selector }
+    })
+  }, [sendCommand])
+
   return {
     sendCommand,
     setInspectorMode,
     captureScreenshot,
     captureElement,
-    clearSelection
+    clearSelection,
+    applyEdit,
+    revertEdits,
+    revertElement,
+    getComputedStyles
   }
 }

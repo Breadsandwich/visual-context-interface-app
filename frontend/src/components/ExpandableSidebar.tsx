@@ -1,13 +1,25 @@
 import { useEffect } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
+import { useEditorStore } from '../stores/editorStore'
 import { SelectionPreview } from './SelectionPreview'
 import { ImageUpload } from './ImageUpload'
 import { InstructionInput } from './InstructionInput'
 import { PayloadPreview } from './PayloadPreview'
+import { EditorPanel } from './EditorPanel'
 import './ExpandableSidebar.css'
 
-export function ExpandableSidebar() {
-  const { isSidebarOpen, closeSidebar } = useInspectorStore()
+interface ExpandableSidebarProps {
+  applyEdit: (selector: string, property: string, value: string) => void
+  revertEdits: () => void
+  revertElement: (selector: string) => void
+  getComputedStyles: (selector: string) => void
+}
+
+export function ExpandableSidebar({ applyEdit, revertEdits, revertElement, getComputedStyles }: ExpandableSidebarProps) {
+  const { isSidebarOpen, closeSidebar, mode } = useInspectorStore()
+  const activeElement = useEditorStore((s) => s.activeElement)
+  const isEditMode = mode === 'edit'
+  const showBackArrow = isEditMode && activeElement !== null
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -23,11 +35,29 @@ export function ExpandableSidebar() {
     <aside
       className={`expandable-sidebar ${isSidebarOpen ? 'open' : ''}`}
       role="complementary"
-      aria-label="Context Panel"
+      aria-label={isEditMode ? 'Editor Panel' : 'Context Panel'}
       aria-hidden={!isSidebarOpen}
     >
       <div className="sidebar-header">
-        <h2>Context Panel</h2>
+        {showBackArrow ? (
+          <button
+            className="sidebar-back"
+            onClick={() => {
+              useEditorStore.getState().setActiveElement(null)
+              useInspectorStore.getState().setMode('inspection')
+            }}
+            title="Back to selection"
+            aria-label="Back to selection"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+          </button>
+        ) : (
+          <div className="sidebar-header-spacer" />
+        )}
+        <h2>{isEditMode ? 'Editor' : 'Context Panel'}</h2>
         <button
           className="sidebar-close"
           onClick={closeSidebar}
@@ -42,25 +72,36 @@ export function ExpandableSidebar() {
       </div>
 
       <div className="sidebar-content">
-        <div className="sidebar-section">
-          <h3>Selection</h3>
-          <SelectionPreview />
-        </div>
+        {isEditMode ? (
+          <EditorPanel
+            applyEdit={applyEdit}
+            revertEdits={revertEdits}
+            revertElement={revertElement}
+            getComputedStyles={getComputedStyles}
+          />
+        ) : (
+          <>
+            <div className="sidebar-section">
+              <h3>Selection</h3>
+              <SelectionPreview />
+            </div>
 
-        <div className="sidebar-section">
-          <h3>Reference Images</h3>
-          <ImageUpload />
-        </div>
+            <div className="sidebar-section">
+              <h3>Reference Images</h3>
+              <ImageUpload />
+            </div>
 
-        <div className="sidebar-section">
-          <h3>Instructions</h3>
-          <InstructionInput />
-        </div>
+            <div className="sidebar-section">
+              <h3>Instructions</h3>
+              <InstructionInput />
+            </div>
 
-        <div className="sidebar-section">
-          <h3>Export</h3>
-          <PayloadPreview />
-        </div>
+            <div className="sidebar-section">
+              <h3>Export</h3>
+              <PayloadPreview />
+            </div>
+          </>
+        )}
       </div>
     </aside>
   )

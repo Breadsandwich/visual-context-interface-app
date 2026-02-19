@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
+import { useEditorStore } from '../stores/editorStore'
 import { useVisionAnalysis } from '../hooks/useVisionAnalysis'
 import './SelectionPreview.css'
 
@@ -16,10 +17,24 @@ export function SelectionPreview() {
     setScreenshotPrompt
   } = useInspectorStore()
 
+  const elementEdits = useInspectorStore((s) => s.elementEdits)
   const screenshotAnalysis = useInspectorStore((s) => s.screenshotAnalysis)
   const screenshotAnalysisStatus = useInspectorStore((s) => s.screenshotAnalysisStatus)
 
   const { analyzeScreenshot, cancelScreenshotAnalysis } = useVisionAnalysis()
+
+  const handleEditElement = useCallback((selector: string) => {
+    const savedEdits = useInspectorStore.getState().elementEdits[selector]
+    if (savedEdits && savedEdits.length > 0) {
+      const editorState = useEditorStore.getState()
+      for (const edit of savedEdits) {
+        editorState.addEdit(selector, edit)
+      }
+    }
+    useEditorStore.getState().setActiveElement(selector)
+    useInspectorStore.getState().setMode('edit')
+    useInspectorStore.getState().openSidebar()
+  }, [])
 
   useEffect(() => {
     if (!screenshotData) return
@@ -71,6 +86,23 @@ export function SelectionPreview() {
                   {element.classes.map((cls) => (
                     <span key={cls} className="pill pill-class">.{cls}</span>
                   ))}
+                </div>
+                <div className="card-actions">
+                  {(elementEdits[element.selector]?.length ?? 0) > 0 && (
+                    <span className="card-edits-badge">
+                      {elementEdits[element.selector].length} edit{elementEdits[element.selector].length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  <button
+                    className="card-edit-button"
+                    onClick={() => handleEditElement(element.selector)}
+                    title="Edit element"
+                    aria-label={`Edit ${element.selector}`}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M8.5 1.5l2 2L4 10H2v-2l6.5-6.5z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
                 </div>
                 <textarea
                   className="card-prompt"

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { InspectorMode, ElementContext, UploadedImage, ImageCodemap, OutputPayload, VisionAnalysis, AnalysisStatus, ExternalImagePayload, ContextEntry } from '../types/inspector'
+import type { InspectorMode, ElementContext, UploadedImage, ImageCodemap, OutputPayload, VisionAnalysis, AnalysisStatus, ExternalImagePayload, ContextEntry, PropertyEdit } from '../types/inspector'
 
 const MAX_SELECTED_ELEMENTS = 10
 const MAX_UPLOADED_IMAGES = 10
@@ -10,6 +10,7 @@ interface InspectorState {
   mode: InspectorMode
   selectedElements: ElementContext[]
   elementPrompts: Record<string, string>
+  elementEdits: Record<string, PropertyEdit[]>
   uploadedImages: UploadedImage[]
   toastMessage: string | null
   isToastPersistent: boolean
@@ -23,12 +24,17 @@ interface InspectorState {
   isSidebarOpen: boolean
   clearSelectionTrigger: number
   iframeReloadTrigger: number
+  agentProgress: Array<{ turn: number; summary: string; files_read?: string[]; files_written?: string[] }>
+  agentClarification: { question: string; context: string } | null
+  agentPlan: string | null
 
   setMode: (mode: InspectorMode) => void
   toggleSelectedElement: (element: ElementContext) => void
   removeSelectedElement: (selector: string) => void
   setSelectedElements: (elements: ElementContext[]) => void
   setElementPrompt: (selector: string, prompt: string) => void
+  setElementEdits: (selector: string, edits: PropertyEdit[]) => void
+  clearElementEdits: (selector: string) => void
   addUploadedImage: (image: UploadedImage) => void
   removeUploadedImage: (id: string) => void
   clearUploadedImages: () => void
@@ -54,12 +60,18 @@ interface InspectorState {
   openSidebar: () => void
   closeSidebar: () => void
   toggleSidebar: () => void
+  setAgentProgress: (progress: InspectorState['agentProgress']) => void
+  setAgentClarification: (clarification: InspectorState['agentClarification']) => void
+  setAgentPlan: (plan: string | null) => void
+  submitClarification: (response: string) => Promise<void>
+  clearAgentState: () => void
 }
 
 export const useInspectorStore = create<InspectorState>((set, get) => ({
   mode: 'interaction',
   selectedElements: [],
   elementPrompts: {},
+  elementEdits: {},
   uploadedImages: [],
   toastMessage: null,
   isToastPersistent: false,
@@ -73,6 +85,9 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   isSidebarOpen: false,
   clearSelectionTrigger: 0,
   iframeReloadTrigger: 0,
+  agentProgress: [],
+  agentClarification: null,
+  agentPlan: null,
 
   setMode: (mode) => set({ mode }),
 
@@ -85,6 +100,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         (el) => el.selector !== element.selector
       )
       const { [element.selector]: _removed, ...remainingPrompts } = state.elementPrompts
+      const { [element.selector]: _removedEdits, ...remainingEdits } = state.elementEdits
       const unlinkedImages = state.uploadedImages.map((img) =>
         img.linkedElementSelector === element.selector
           ? { ...img, linkedElementSelector: undefined }
@@ -93,6 +109,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
       return {
         selectedElements: filtered,
         elementPrompts: remainingPrompts,
+        elementEdits: remainingEdits,
         uploadedImages: unlinkedImages,
         isSidebarOpen: filtered.length > 0 ? true : state.isSidebarOpen
       }
@@ -109,6 +126,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
 
   removeSelectedElement: (selector) => set((state) => {
     const { [selector]: _removed, ...remainingPrompts } = state.elementPrompts
+    const { [selector]: _removedEdits, ...remainingEdits } = state.elementEdits
     const unlinkedImages = state.uploadedImages.map((img) =>
       img.linkedElementSelector === selector
         ? { ...img, linkedElementSelector: undefined }
@@ -119,6 +137,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         (el) => el.selector !== selector
       ),
       elementPrompts: remainingPrompts,
+      elementEdits: remainingEdits,
       uploadedImages: unlinkedImages
     }
   }),
@@ -129,6 +148,9 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     const cleanedPrompts = Object.fromEntries(
       Object.entries(state.elementPrompts).filter(([key]) => newSelectors.has(key))
     )
+    const cleanedEdits = Object.fromEntries(
+      Object.entries(state.elementEdits).filter(([key]) => newSelectors.has(key))
+    )
     const unlinkedImages = state.uploadedImages.map((img) =>
       img.linkedElementSelector && !newSelectors.has(img.linkedElementSelector)
         ? { ...img, linkedElementSelector: undefined }
@@ -137,6 +159,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     return {
       selectedElements: newElements,
       elementPrompts: cleanedPrompts,
+      elementEdits: cleanedEdits,
       uploadedImages: unlinkedImages
     }
   }),
@@ -152,6 +175,24 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
         [selector]: prompt
       }
     }
+  }),
+
+  setElementEdits: (selector, edits) => set((state) => {
+    if (edits.length === 0) {
+      const { [selector]: _removed, ...rest } = state.elementEdits
+      return { elementEdits: rest }
+    }
+    return {
+      elementEdits: {
+        ...state.elementEdits,
+        [selector]: edits
+      }
+    }
+  }),
+
+  clearElementEdits: (selector) => set((state) => {
+    const { [selector]: _removed, ...rest } = state.elementEdits
+    return { elementEdits: rest }
   }),
 
   addUploadedImage: (image) => set((state) => {
@@ -242,6 +283,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   clearSelection: () => set((state) => ({
     selectedElements: [],
     elementPrompts: {},
+    elementEdits: {},
     screenshotData: null,
     screenshotPrompt: '',
     uploadedImages: state.uploadedImages.map((img) =>
@@ -260,6 +302,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     mode: 'interaction',
     selectedElements: [],
     elementPrompts: {},
+    elementEdits: {},
     uploadedImages: [],
     toastMessage: null,
     isToastPersistent: false,
@@ -269,7 +312,10 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     screenshotAnalysisStatus: 'idle',
     userPrompt: '',
     isSidebarOpen: false,
-    clearSelectionTrigger: state.clearSelectionTrigger + 1
+    clearSelectionTrigger: state.clearSelectionTrigger + 1,
+    agentProgress: [],
+    agentClarification: null,
+    agentPlan: null,
   })),
 
   reloadIframe: () => set((state) => ({ iframeReloadTrigger: state.iframeReloadTrigger + 1 })),
@@ -277,6 +323,34 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   openSidebar: () => set({ isSidebarOpen: true }),
   closeSidebar: () => set({ isSidebarOpen: false }),
   toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+
+  setAgentProgress: (progress) => set({ agentProgress: progress }),
+
+  setAgentClarification: (clarification) => set({ agentClarification: clarification }),
+
+  setAgentPlan: (plan) => set({ agentPlan: plan }),
+
+  submitClarification: async (response) => {
+    try {
+      const resp = await fetch('/api/agent-respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response }),
+      })
+      if (!resp.ok) {
+        const data = await resp.json()
+        get().showToast(data.error ?? 'Failed to send response')
+      }
+    } catch {
+      get().showToast('Failed to send response')
+    }
+  },
+
+  clearAgentState: () => set({
+    agentProgress: [],
+    agentClarification: null,
+    agentPlan: null,
+  }),
 
   generatePayload: () => {
     const state = get()
@@ -308,20 +382,34 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
       }
     }
 
+    const applyTextEditsToHtml = (html: string, edits: PropertyEdit[]): string => {
+      let result = html
+      for (const edit of edits) {
+        if (edit.property === 'textContent' && edit.original && edit.value !== edit.original) {
+          result = result.replace(edit.original, edit.value)
+        }
+      }
+      return result
+    }
+
     const payload: OutputPayload = {
       route: state.currentRoute,
-      contexts: state.selectedElements.map((el): ContextEntry => ({
-        html: el.outerHTML,
-        selector: el.selector,
-        tagName: el.tagName,
-        id: el.id,
-        classes: el.classes,
-        elementPrompt: state.elementPrompts[el.selector] ?? '',
-        sourceFile: el.sourceFile ?? null,
-        sourceLine: el.sourceLine ?? null,
-        componentName: el.componentName ?? null,
-        linkedImages: linkedBySelector.get(el.selector) ?? []
-      })),
+      contexts: state.selectedElements.map((el): ContextEntry => {
+        const edits = state.elementEdits[el.selector] ?? []
+        return {
+          html: applyTextEditsToHtml(el.outerHTML, edits),
+          selector: el.selector,
+          tagName: el.tagName,
+          id: el.id,
+          classes: el.classes,
+          elementPrompt: state.elementPrompts[el.selector] ?? '',
+          sourceFile: el.sourceFile ?? null,
+          sourceLine: el.sourceLine ?? null,
+          componentName: el.componentName ?? null,
+          linkedImages: linkedBySelector.get(el.selector) ?? [],
+          savedEdits: edits,
+        }
+      }),
       externalImages: unlinkedImages,
       visualPrompt: state.screenshotPrompt,
       visualAnalysis: state.screenshotAnalysis,

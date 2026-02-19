@@ -32,16 +32,6 @@
   }
 }
 
-.toast-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  flex-shrink: 0;
-  animation: toast-spin 0.8s linear infinite;
-}
-
 @keyframes toast-spin {
   to {
     transform: rotate(360deg);
@@ -90,4 +80,120 @@
     animation: none;
     transition: none;
   }
+}
+
+/* --- Progress mode --- */
+
+.toast-icon {
+  flex-shrink: 0;
+}
+
+.toast-icon-spin {
+  animation: toast-spin 0.8s linear infinite;
+}
+
+.toast-progress-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* --- Clarification mode --- */
+
+.toast-expanded {
+  border-radius: 12px;
+  padding: 0.875rem 1rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.toast-clarification {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.toast-clarification-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toast-clarification-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+}
+
+.toast-clarification-question {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.toast-clarification-input-row {
+  display: flex;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+
+.toast-clarification-input {
+  flex: 1;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.toast-clarification-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.toast-clarification-input:focus {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.toast-clarification-submit,
+.toast-clarification-skip {
+  padding: 0.375rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.toast-clarification-submit {
+  background: rgba(255, 255, 255, 0.9);
+  color: #4361EE;
+}
+
+.toast-clarification-submit:hover:not(:disabled) {
+  background: #fff;
+}
+
+.toast-clarification-skip {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.toast-clarification-skip:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.toast-clarification-submit:disabled,
+.toast-clarification-skip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

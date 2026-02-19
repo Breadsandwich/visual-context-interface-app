@@ -38,6 +38,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3001:3001"
+      - "8002:8002"
     volumes:
       - ./dummy-target:/app
       - /app/node_modules

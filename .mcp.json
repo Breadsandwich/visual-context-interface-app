@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "vci-context": {
+      "command": "node",
+      "args": ["cli/mcp/server.js"]
+    }
+  }
+}

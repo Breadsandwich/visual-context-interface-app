@@ -1,9 +1,19 @@
 #!/bin/sh
 
-# Initialize /output with sample project if empty (first deploy)
+# Sync dummy-target source to shared volume on every startup.
+# Always overwrite config/infra files so deploys pick up changes.
+# Preserve api/data.db (the SQLite database) across restarts.
 if [ ! -f /output/package.json ]; then
     echo "Initializing /output with dummy-target source..."
     cp -r /app/dummy-target-src/* /output/
+else
+    echo "Syncing dummy-target config files..."
+    cp /app/dummy-target-src/package.json /output/package.json
+    cp /app/dummy-target-src/vite.config.js /output/vite.config.js
+    cp /app/dummy-target-src/entrypoint.sh /output/entrypoint.sh
+    cp /app/dummy-target-src/requirements.txt /output/requirements.txt
+    cp -r /app/dummy-target-src/api/*.py /output/api/
+    cp -r /app/dummy-target-src/src/ /output/src/
 fi
 
 # Start agent service (internal only)

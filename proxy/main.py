@@ -15,6 +15,14 @@ from pydantic import BaseModel, Field, field_validator
 
 from datetime import datetime, timezone
 from injection import inject_inspector_script, rewrite_asset_paths
+from source_editor import (
+    partition_edits,
+    apply_inline_style_edit,
+    apply_css_class_edit,
+    find_css_file,
+    extract_classes_from_selector,
+)
+from backend_scanner import scan_backend
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +178,18 @@ async def export_context(request_body: ExportContextRequest):
         vci_dir.mkdir(exist_ok=True)
         history_dir.mkdir(exist_ok=True)
 
-        payload_json = json_module.dumps(request_body.payload, indent=2)
+        # Scan backend structure and inject into payload
+        payload = request_body.payload
+        api_dir = output_base / "dummy-target" / "api"
+        if api_dir.is_dir():
+            try:
+                backend_map = scan_backend(api_dir)
+                if backend_map.get("endpoints") or backend_map.get("models"):
+                    payload = {**payload, "backendMap": backend_map}
+            except Exception:
+                logger.warning("Backend scan failed, continuing without backend map")
+
+        payload_json = json_module.dumps(payload, indent=2)
 
         # Write latest context
         context_path = vci_dir / "context.json"
@@ -229,9 +248,137 @@ async def agent_status():
                 "filesChanged": data.get("filesChanged", []),
                 "message": data.get("message"),
                 "turns": data.get("turns", 0),
+                "error": data.get("error"),
+                "clarification": data.get("clarification"),
+                "progress": data.get("progress", []),
+                "plan": data.get("plan"),
             }
     except Exception:
         return {"status": "unavailable"}
+
+
+class AgentRespondProxyRequest(BaseModel):
+    response: str = Field(..., min_length=1, max_length=2000)
+
+
+@app.post("/api/agent-respond")
+async def agent_respond_proxy(request_body: AgentRespondProxyRequest):
+    """Proxy clarification response to internal agent service."""
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(
+                "http://localhost:8001/agent/respond",
+                json={"response": request_body.response},
+                timeout=5.0,
+            )
+            return resp.json()
+    except httpx.ConnectError:
+        return Response(
+            content=json_module.dumps({"error": "Agent service unavailable"}),
+            status_code=503,
+            media_type="application/json",
+        )
+    except Exception:
+        logger.exception("Agent respond proxy failed")
+        return Response(
+            content=json_module.dumps({"error": "Failed to send response"}),
+            status_code=500,
+            media_type="application/json",
+        )
+
+
+class PropertyChange(BaseModel):
+    property: str = Field(..., min_length=1, max_length=100)
+    value: str = Field(..., max_length=500)
+    original: str = Field(default="", max_length=500)
+
+
+class EditItem(BaseModel):
+    selector: str = Field(..., min_length=1, max_length=500)
+    sourceFile: str | None = None
+    sourceLine: int | None = None
+    componentName: str | None = None
+    changes: list[PropertyChange] = Field(..., min_length=1)
+
+
+class ApplyEditsRequest(BaseModel):
+    edits: list[EditItem] = Field(..., max_length=100)
+
+
+@app.post("/api/apply-edits")
+async def apply_edits_endpoint(request_body: ApplyEditsRequest):
+    """Apply direct edits to source files via hybrid engine.
+
+    Partitions edits into deterministic (direct file write) and AI-assisted.
+    Executes deterministic edits immediately, returns AI-assisted for agent routing.
+    """
+    if not VCI_OUTPUT_DIR:
+        return Response(
+            content=json_module.dumps({
+                "success": False,
+                "error": "VCI_OUTPUT_DIR not configured",
+            }),
+            status_code=503,
+            media_type="application/json",
+        )
+
+    try:
+        project_dir = Path(VCI_OUTPUT_DIR).resolve(strict=True)
+    except (FileNotFoundError, RuntimeError, OSError):
+        return Response(
+            content=json_module.dumps({
+                "success": False,
+                "error": f"VCI_OUTPUT_DIR does not exist: {VCI_OUTPUT_DIR}",
+            }),
+            status_code=503,
+            media_type="application/json",
+        )
+
+    edit_dicts = [e.model_dump(by_alias=True) for e in request_body.edits]
+    deterministic, ai_assisted = partition_edits(edit_dicts)
+
+    applied = []
+    for edit in deterministic:
+        source_file = edit.get("sourceFile")
+        source_line = edit.get("sourceLine")
+        unapplied_changes = []
+        for change in edit.get("changes", []):
+            success = apply_inline_style_edit(
+                project_dir,
+                source_file,
+                source_line,
+                change["property"],
+                change["value"],
+            )
+            if not success and source_file:
+                # Fallback: find associated CSS file and edit by class name
+                css_path = find_css_file(project_dir, source_file)
+                if css_path:
+                    classes = extract_classes_from_selector(edit["selector"])
+                    success = apply_css_class_edit(
+                        css_path,
+                        classes,
+                        change["property"],
+                        change["value"],
+                    )
+            if success:
+                applied.append({
+                    "selector": edit["selector"],
+                    "property": change["property"],
+                    "value": change["value"],
+                })
+            else:
+                unapplied_changes.append(change)
+
+        # Route unapplied deterministic edits to AI instead of marking as failed
+        if unapplied_changes:
+            ai_assisted.append({**edit, "changes": unapplied_changes})
+
+    return {
+        "success": True,
+        "applied": applied,
+        "aiAssisted": ai_assisted,
+    }
 
 
 @app.get("/inspector/{filename:path}")

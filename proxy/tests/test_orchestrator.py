@@ -168,6 +168,65 @@ class TestParsePlanResponse:
         assert result is not None
         assert result["execution"] == "sequential"
 
+    def test_parse_plan_response_strips_markdown_fences(self):
+        """Strips ```json ... ``` markdown fencing from response."""
+        plan = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "id": "t1",
+                        "agent": "backend-engineer",
+                        "description": "Add assignee field",
+                        "file_locks": ["api/models.py"],
+                        "depends_on": [],
+                    }
+                ],
+                "execution": "sequential",
+            }
+        )
+        fenced = f"```json\n{plan}\n```"
+        result = _parse_plan_response(fenced)
+        assert result is not None
+        assert len(result["tasks"]) == 1
+        assert result["tasks"][0]["agent"] == "backend-engineer"
+
+    def test_parse_plan_response_strips_plain_fences(self):
+        """Strips ``` ... ``` fencing without language tag."""
+        plan = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "id": "t1",
+                        "agent": "frontend-engineer",
+                        "description": "Fix button",
+                        "file_locks": [],
+                        "depends_on": [],
+                    }
+                ],
+                "execution": "parallel",
+            }
+        )
+        fenced = f"```\n{plan}\n```"
+        result = _parse_plan_response(fenced)
+        assert result is not None
+        assert result["execution"] == "parallel"
+
+    def test_parse_plan_response_missing_required_task_keys(self):
+        """Returns None when tasks are missing required keys."""
+        plan = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "id": "t1",
+                        "agent": "frontend-engineer",
+                        # missing "description"
+                    }
+                ],
+            }
+        )
+        result = _parse_plan_response(plan)
+        assert result is None
+
 
 # ── Orchestrator.run — no API key ─────────────────────────────────
 

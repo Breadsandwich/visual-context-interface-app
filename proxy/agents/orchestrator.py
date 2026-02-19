@@ -38,8 +38,17 @@ def _parse_plan_response(text: str) -> dict[str, Any] | None:
     Returns:
         Parsed plan dict, or None on failure.
     """
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        first_newline = cleaned.find("\n")
+        if first_newline != -1:
+            cleaned = cleaned[first_newline + 1:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
     try:
-        plan = json.loads(text.strip())
+        plan = json.loads(cleaned)
     except (json.JSONDecodeError, ValueError):
         logger.warning("Orchestrator returned non-JSON: %s", text[:200])
         return None

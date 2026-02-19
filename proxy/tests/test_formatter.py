@@ -1,5 +1,4 @@
 import os
-import tempfile
 from unittest.mock import patch
 
 import pytest
@@ -194,6 +193,7 @@ class TestFormatPayloadPreloading:
             result = format_payload(payload, budget=80)
 
         assert "Pre-loaded Files" not in result
+        assert "Design References" in result
 
 
 class TestFormatPayloadWithEdits:

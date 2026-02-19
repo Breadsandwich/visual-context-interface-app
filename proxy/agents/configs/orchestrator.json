@@ -1,0 +1,10 @@
+{
+  "id": "orchestrator",
+  "name": "Orchestrator",
+  "model": "claude-sonnet-4-5-20250929",
+  "system_prompt_file": "prompts/orchestrator.md",
+  "tools": [],
+  "delegates_to": ["frontend-engineer", "backend-engineer"],
+  "review_agent": "reviewer",
+  "max_tokens": 4096
+}

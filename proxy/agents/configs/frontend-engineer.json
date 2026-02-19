@@ -1,0 +1,14 @@
+{
+  "id": "frontend-engineer",
+  "name": "Frontend Engineer",
+  "model": "claude-sonnet-4-5-20250929",
+  "system_prompt_file": "prompts/frontend-engineer.md",
+  "tools": ["read_file", "write_file", "list_directory", "search_files", "run_tests"],
+  "file_scope": {
+    "allowed_patterns": ["src/**", "public/**", "*.html", "*.css", "*.tsx", "*.ts", "*.jsx", "*.js"],
+    "blocked_patterns": ["api/**", "database.*", "models.*", "routes/**"]
+  },
+  "test_command": "npm test",
+  "max_turns": 15,
+  "max_tokens": 4096
+}

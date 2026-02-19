@@ -1,0 +1,9 @@
+{
+  "id": "reviewer",
+  "name": "Security & Code Reviewer",
+  "model": "claude-sonnet-4-5-20250929",
+  "system_prompt_file": "prompts/reviewer.md",
+  "tools": ["read_file", "list_directory", "search_files"],
+  "max_turns": 5,
+  "max_tokens": 4096
+}

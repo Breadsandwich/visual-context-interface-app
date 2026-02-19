@@ -145,6 +145,20 @@ export function PayloadPreview() {
           continue
         }
 
+        if (status.status === 'planning') {
+          showPersistentToast('Planning tasks...')
+          continue
+        }
+
+        if (status.status === 'delegating') {
+          showPersistentToast('Assigning tasks to agents...')
+          continue
+        }
+
+        if (status.status === 'reviewing') {
+          continue
+        }
+
         if (status.status === 'running') {
           setAgentClarification(null)
 

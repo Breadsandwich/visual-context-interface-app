@@ -15,7 +15,7 @@ from agents.state import MultiAgentState
 
 @pytest.fixture
 def mock_registry(tmp_path):
-    """Create a temp registry with orchestrator, frontend, backend, reviewer."""
+    """Create a temp registry with orchestrator, fullstack-engineer, reviewer."""
     configs_dir = tmp_path / "configs"
     configs_dir.mkdir()
     prompts_dir = tmp_path / "prompts"
@@ -23,8 +23,7 @@ def mock_registry(tmp_path):
 
     for agent_id in [
         "orchestrator",
-        "frontend-engineer",
-        "backend-engineer",
+        "fullstack-engineer",
         "reviewer",
     ]:
         (prompts_dir / f"{agent_id}.md").write_text(f"You are {agent_id}.")
@@ -34,27 +33,25 @@ def mock_registry(tmp_path):
             "model": "claude-sonnet-4-5-20250929",
             "system_prompt_file": f"prompts/{agent_id}.md",
             "tools": (
-                ["read_file", "write_file"]
-                if agent_id not in ("orchestrator", "reviewer")
-                else []
+                ["read_file", "write_file", "list_directory", "search_files", "run_tests"]
+                if agent_id == "fullstack-engineer"
+                else (
+                    ["read_file", "list_directory", "search_files"]
+                    if agent_id == "reviewer"
+                    else []
+                )
             ),
-            "max_turns": 15,
+            "max_turns": 40,
             "max_tokens": 4096,
         }
         if agent_id == "orchestrator":
-            config["delegates_to"] = [
-                "frontend-engineer",
-                "backend-engineer",
-            ]
+            config["delegates_to"] = ["fullstack-engineer"]
             config["review_agent"] = "reviewer"
-        if agent_id == "reviewer":
-            config["tools"] = ["read_file", "list_directory", "search_files"]
-        if agent_id in ("frontend-engineer", "backend-engineer"):
-            config["test_command"] = (
-                "npm test"
-                if agent_id == "frontend-engineer"
-                else "pytest"
-            )
+        if agent_id == "fullstack-engineer":
+            config["test_commands"] = {
+                "backend": "python -m pytest",
+                "frontend": "npm test",
+            }
 
         (configs_dir / f"{agent_id}.json").write_text(json.dumps(config))
 
@@ -86,7 +83,7 @@ class TestParsePlanResponse:
                 "tasks": [
                     {
                         "id": "t1",
-                        "agent": "frontend-engineer",
+                        "agent": "fullstack-engineer",
                         "description": "Add button",
                         "file_locks": ["src/App.tsx"],
                         "depends_on": [],
@@ -98,7 +95,7 @@ class TestParsePlanResponse:
         result = _parse_plan_response(valid_plan)
         assert result is not None
         assert len(result["tasks"]) == 1
-        assert result["tasks"][0]["agent"] == "frontend-engineer"
+        assert result["tasks"][0]["agent"] == "fullstack-engineer"
         assert result["execution"] == "parallel"
 
     def test_parse_plan_response_multiple_tasks(self):
@@ -108,14 +105,14 @@ class TestParsePlanResponse:
                 "tasks": [
                     {
                         "id": "t1",
-                        "agent": "frontend-engineer",
+                        "agent": "fullstack-engineer",
                         "description": "UI changes",
                         "file_locks": ["src/App.tsx"],
                         "depends_on": [],
                     },
                     {
                         "id": "t2",
-                        "agent": "backend-engineer",
+                        "agent": "fullstack-engineer",
                         "description": "API endpoint",
                         "file_locks": ["api/routes.py"],
                         "depends_on": [],
@@ -155,7 +152,7 @@ class TestParsePlanResponse:
                 "tasks": [
                     {
                         "id": "t1",
-                        "agent": "frontend-engineer",
+                        "agent": "fullstack-engineer",
                         "description": "task",
                         "file_locks": [],
                         "depends_on": [],
@@ -175,7 +172,7 @@ class TestParsePlanResponse:
                 "tasks": [
                     {
                         "id": "t1",
-                        "agent": "backend-engineer",
+                        "agent": "fullstack-engineer",
                         "description": "Add assignee field",
                         "file_locks": ["api/models.py"],
                         "depends_on": [],
@@ -188,7 +185,7 @@ class TestParsePlanResponse:
         result = _parse_plan_response(fenced)
         assert result is not None
         assert len(result["tasks"]) == 1
-        assert result["tasks"][0]["agent"] == "backend-engineer"
+        assert result["tasks"][0]["agent"] == "fullstack-engineer"
 
     def test_parse_plan_response_strips_plain_fences(self):
         """Strips ``` ... ``` fencing without language tag."""
@@ -197,7 +194,7 @@ class TestParsePlanResponse:
                 "tasks": [
                     {
                         "id": "t1",
-                        "agent": "frontend-engineer",
+                        "agent": "fullstack-engineer",
                         "description": "Fix button",
                         "file_locks": [],
                         "depends_on": [],
@@ -218,7 +215,7 @@ class TestParsePlanResponse:
                 "tasks": [
                     {
                         "id": "t1",
-                        "agent": "frontend-engineer",
+                        "agent": "fullstack-engineer",
                         # missing "description"
                     }
                 ],

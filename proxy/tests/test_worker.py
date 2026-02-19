@@ -10,15 +10,18 @@ from agents.worker import WorkerAgent, _build_turn_summary
 
 
 @pytest.fixture
-def frontend_config():
+def fullstack_config():
     return {
-        "id": "frontend-engineer",
-        "name": "Frontend Engineer",
+        "id": "fullstack-engineer",
+        "name": "Full-Stack Engineer",
         "model": "claude-sonnet-4-5-20250929",
-        "system_prompt": "You are a frontend engineer.",
+        "system_prompt": "You are a full-stack engineer.",
         "tools": ["read_file", "write_file"],
-        "test_command": "npm test",
-        "max_turns": 15,
+        "test_commands": {
+            "backend": "python -m pytest",
+            "frontend": "npm test",
+        },
+        "max_turns": 40,
         "max_tokens": 4096,
     }
 
@@ -102,13 +105,13 @@ class TestBuildTurnSummary:
 
 
 class TestWorkerInit:
-    def test_initializes_with_config(self, frontend_config):
-        worker = WorkerAgent(frontend_config, worker_id="fe-1")
+    def test_initializes_with_config(self, fullstack_config):
+        worker = WorkerAgent(fullstack_config, worker_id="fe-1")
         assert worker.worker_id == "fe-1"
-        assert worker.agent_name == "Frontend Engineer"
+        assert worker.agent_name == "Full-Stack Engineer"
 
-    def test_builds_filtered_tool_list(self, frontend_config):
-        worker = WorkerAgent(frontend_config, worker_id="fe-1")
+    def test_builds_filtered_tool_list(self, fullstack_config):
+        worker = WorkerAgent(fullstack_config, worker_id="fe-1")
         tool_names = [t["name"] for t in worker.get_tools()]
         assert "read_file" in tool_names
         assert "write_file" in tool_names
@@ -145,11 +148,11 @@ class TestWorkerInit:
         worker = WorkerAgent(config, worker_id="nm-1")
         assert worker._model == "claude-haiku-3"
 
-    def test_stores_lock_manager_and_progress_callback(self, frontend_config):
+    def test_stores_lock_manager_and_progress_callback(self, fullstack_config):
         lock_mgr = MagicMock()
         progress_fn = MagicMock()
         worker = WorkerAgent(
-            frontend_config,
+            fullstack_config,
             worker_id="fe-1",
             lock_manager=lock_mgr,
             on_progress=progress_fn,
@@ -163,9 +166,9 @@ class TestWorkerInit:
 
 class TestWorkerRunNoApiKey:
     @pytest.mark.asyncio
-    async def test_returns_error_without_api_key(self, frontend_config, monkeypatch):
+    async def test_returns_error_without_api_key(self, fullstack_config, monkeypatch):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        worker = WorkerAgent(frontend_config, worker_id="fe-1")
+        worker = WorkerAgent(fullstack_config, worker_id="fe-1")
         result = await worker.run("Add a button")
         assert result["status"] == "error"
         assert "ANTHROPIC_API_KEY" in result["message"]
@@ -177,7 +180,7 @@ class TestWorkerRunNoApiKey:
 
 class TestWorkerRunEndTurn:
     @pytest.mark.asyncio
-    async def test_end_turn_returns_text_message(self, frontend_config, monkeypatch):
+    async def test_end_turn_returns_text_message(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         mock_response = MagicMock()
@@ -188,7 +191,7 @@ class TestWorkerRunEndTurn:
         mock_client.messages.create = AsyncMock(return_value=mock_response)
 
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client):
-            worker = WorkerAgent(frontend_config, worker_id="fe-1")
+            worker = WorkerAgent(fullstack_config, worker_id="fe-1")
             result = await worker.run("Review the code")
 
         assert result["status"] == "success"
@@ -196,7 +199,7 @@ class TestWorkerRunEndTurn:
         assert result["files_changed"] == []
 
     @pytest.mark.asyncio
-    async def test_end_turn_emits_progress(self, frontend_config, monkeypatch):
+    async def test_end_turn_emits_progress(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         mock_response = MagicMock()
@@ -210,7 +213,7 @@ class TestWorkerRunEndTurn:
 
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client):
             worker = WorkerAgent(
-                frontend_config,
+                fullstack_config,
                 worker_id="fe-1",
                 on_progress=lambda p: progress_calls.append(p),
             )
@@ -225,7 +228,7 @@ class TestWorkerRunEndTurn:
 
 class TestWorkerRunToolUseLoop:
     @pytest.mark.asyncio
-    async def test_executes_tool_and_loops(self, frontend_config, monkeypatch):
+    async def test_executes_tool_and_loops(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         # First response: tool_use (write_file)
@@ -246,7 +249,7 @@ class TestWorkerRunToolUseLoop:
 
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client), \
              patch("agents.worker.execute_tool", return_value=("Successfully wrote 30 bytes to src/Button.tsx", 1)):
-            worker = WorkerAgent(frontend_config, worker_id="fe-1")
+            worker = WorkerAgent(fullstack_config, worker_id="fe-1")
             result = await worker.run("Create a Button component")
 
         assert result["status"] == "success"
@@ -254,7 +257,7 @@ class TestWorkerRunToolUseLoop:
         assert result["message"] == "Created Button component."
 
     @pytest.mark.asyncio
-    async def test_tracks_multiple_files_changed(self, frontend_config, monkeypatch):
+    async def test_tracks_multiple_files_changed(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         # Turn 1: write file A
@@ -286,7 +289,7 @@ class TestWorkerRunToolUseLoop:
 
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client), \
              patch("agents.worker.execute_tool", side_effect=mock_execute_tool):
-            worker = WorkerAgent(frontend_config, worker_id="fe-1")
+            worker = WorkerAgent(fullstack_config, worker_id="fe-1")
             result = await worker.run("Create two components")
 
         assert result["status"] == "success"
@@ -299,7 +302,7 @@ class TestWorkerRunToolUseLoop:
 
 class TestWorkerRunFileLock:
     @pytest.mark.asyncio
-    async def test_blocked_write_when_locked_by_other(self, frontend_config, monkeypatch):
+    async def test_blocked_write_when_locked_by_other(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         tool_block = _make_tool_use_block(
@@ -321,7 +324,7 @@ class TestWorkerRunFileLock:
 
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client):
             worker = WorkerAgent(
-                frontend_config,
+                fullstack_config,
                 worker_id="fe-1",
                 lock_manager=lock_mgr,
             )
@@ -333,7 +336,7 @@ class TestWorkerRunFileLock:
         lock_mgr.can_write.assert_called_once_with("fe-1", "src/Shared.tsx")
 
     @pytest.mark.asyncio
-    async def test_allowed_write_when_lock_held(self, frontend_config, monkeypatch):
+    async def test_allowed_write_when_lock_held(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         tool_block = _make_tool_use_block(
@@ -356,7 +359,7 @@ class TestWorkerRunFileLock:
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client), \
              patch("agents.worker.execute_tool", return_value=("Successfully wrote 4 bytes to src/Mine.tsx", 1)):
             worker = WorkerAgent(
-                frontend_config,
+                fullstack_config,
                 worker_id="fe-1",
                 lock_manager=lock_mgr,
             )
@@ -413,7 +416,7 @@ class TestWorkerRunTests:
 
 class TestWorkerRunErrors:
     @pytest.mark.asyncio
-    async def test_api_error_returns_error_result(self, frontend_config, monkeypatch):
+    async def test_api_error_returns_error_result(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         from anthropic import APIError
@@ -427,21 +430,21 @@ class TestWorkerRunErrors:
         mock_client.messages.create = AsyncMock(side_effect=mock_error)
 
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client):
-            worker = WorkerAgent(frontend_config, worker_id="fe-1")
+            worker = WorkerAgent(fullstack_config, worker_id="fe-1")
             result = await worker.run("Do something")
 
         assert result["status"] == "error"
         assert "Claude API error" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_unexpected_exception_returns_error(self, frontend_config, monkeypatch):
+    async def test_unexpected_exception_returns_error(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(side_effect=RuntimeError("network down"))
 
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client):
-            worker = WorkerAgent(frontend_config, worker_id="fe-1")
+            worker = WorkerAgent(fullstack_config, worker_id="fe-1")
             result = await worker.run("Do something")
 
         assert result["status"] == "error"
@@ -489,7 +492,7 @@ class TestWorkerRunMaxTurns:
 
 class TestWorkerRunContext:
     @pytest.mark.asyncio
-    async def test_context_prepended_to_prompt(self, frontend_config, monkeypatch):
+    async def test_context_prepended_to_prompt(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         resp = MagicMock()
@@ -500,7 +503,7 @@ class TestWorkerRunContext:
         mock_client.messages.create = AsyncMock(return_value=resp)
 
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client):
-            worker = WorkerAgent(frontend_config, worker_id="fe-1")
+            worker = WorkerAgent(fullstack_config, worker_id="fe-1")
             await worker.run("Fix the bug", context="Project uses React 18")
 
         call_args = mock_client.messages.create.call_args
@@ -509,7 +512,7 @@ class TestWorkerRunContext:
         assert "Fix the bug" in user_message
 
     @pytest.mark.asyncio
-    async def test_no_context_just_task(self, frontend_config, monkeypatch):
+    async def test_no_context_just_task(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         resp = MagicMock()
@@ -520,7 +523,7 @@ class TestWorkerRunContext:
         mock_client.messages.create = AsyncMock(return_value=resp)
 
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client):
-            worker = WorkerAgent(frontend_config, worker_id="fe-1")
+            worker = WorkerAgent(fullstack_config, worker_id="fe-1")
             await worker.run("Fix the bug")
 
         call_args = mock_client.messages.create.call_args
@@ -534,7 +537,7 @@ class TestWorkerRunContext:
 
 class TestWorkerRunWriteNoLockManager:
     @pytest.mark.asyncio
-    async def test_write_without_lock_manager_tracks_files(self, frontend_config, monkeypatch):
+    async def test_write_without_lock_manager_tracks_files(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         tool_block = _make_tool_use_block(
@@ -553,13 +556,13 @@ class TestWorkerRunWriteNoLockManager:
 
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client), \
              patch("agents.worker.execute_tool", return_value=("Successfully wrote 7 bytes", 1)):
-            worker = WorkerAgent(frontend_config, worker_id="fe-1")
+            worker = WorkerAgent(fullstack_config, worker_id="fe-1")
             result = await worker.run("Create file")
 
         assert "src/New.tsx" in result["files_changed"]
 
     @pytest.mark.asyncio
-    async def test_write_error_does_not_track_file(self, frontend_config, monkeypatch):
+    async def test_write_error_does_not_track_file(self, fullstack_config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         tool_block = _make_tool_use_block(
@@ -578,7 +581,7 @@ class TestWorkerRunWriteNoLockManager:
 
         with patch("agents.worker.AsyncAnthropic", return_value=mock_client), \
              patch("agents.worker.execute_tool", return_value=("Error: Path outside project directory", 0)):
-            worker = WorkerAgent(frontend_config, worker_id="fe-1")
+            worker = WorkerAgent(fullstack_config, worker_id="fe-1")
             result = await worker.run("Write bad file")
 
         assert "src/Bad.tsx" not in result["files_changed"]

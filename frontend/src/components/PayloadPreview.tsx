@@ -5,6 +5,8 @@ import './PayloadPreview.css'
 
 const AGENT_POLL_INTERVAL = 2000
 const AGENT_POLL_MAX_ATTEMPTS = 150 // 5 minutes max
+const IDLE_GRACE_POLLS = 3 // Exit after 3 consecutive idle polls (~6s)
+const UNAVAILABLE_MAX_POLLS = 15 // Give up after ~30s of backend unreachable
 
 interface AgentStatusResponse {
   status: 'idle' | 'analyzing' | 'clarifying' | 'running' | 'success' | 'error' | 'unavailable'
@@ -56,6 +58,9 @@ export function PayloadPreview() {
     const { signal } = controller
 
     try {
+      let idleCount = 0
+      let unavailableCount = 0
+
       for (let attempt = 0; attempt < AGENT_POLL_MAX_ATTEMPTS; attempt++) {
         await delay(AGENT_POLL_INTERVAL, signal)
 
@@ -64,8 +69,17 @@ export function PayloadPreview() {
         if (signal.aborted) return
 
         if (status.status === 'unavailable') {
-          return
+          unavailableCount++
+          if (unavailableCount > UNAVAILABLE_MAX_POLLS) {
+            clearAgentState()
+            dismissToast()
+            showToast('Agent is not responding — please try again')
+            return
+          }
+          continue
         }
+
+        unavailableCount = 0
 
         if (status.status === 'success') {
           clearAgentState()
@@ -107,8 +121,16 @@ export function PayloadPreview() {
         }
 
         if (status.status === 'idle') {
-          return
+          idleCount++
+          if (idleCount >= IDLE_GRACE_POLLS) {
+            clearAgentState()
+            dismissToast()
+            return
+          }
+          continue
         }
+
+        idleCount = 0
       }
 
       clearAgentState()
@@ -118,6 +140,11 @@ export function PayloadPreview() {
       throw err
     } finally {
       abortRef.current = null
+      const { isToastPersistent } = useInspectorStore.getState()
+      if (isToastPersistent) {
+        clearAgentState()
+        dismissToast()
+      }
     }
   }
 

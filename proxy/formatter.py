@@ -338,11 +338,13 @@ def _build_preloaded_files(
 def format_payload(payload: dict, budget: int = DEFAULT_TOKEN_BUDGET) -> str:
     """Build the formatted prompt using a multi-pass budget strategy.
 
-    Pass 1: Full fidelity (HTML + vision analysis)
+    Pass 1: Full fidelity (HTML + vision analysis + pre-loaded files)
     Pass 2: Strip HTML from elements
     Pass 3: Simplify vision summaries in images
-    Pass 4: Drop images and screenshot entirely
-    Pass 5: Hard truncate as last resort
+    Pass 4: Drop pre-loaded files (agent will read them itself)
+    Pass 5: Drop images and screenshot entirely
+    Pass 6: Drop backend section
+    Pass 7: Hard truncate as last resort
 
     Always preserved: user prompt, source file paths, element selectors.
     """
@@ -355,29 +357,40 @@ def format_payload(payload: dict, budget: int = DEFAULT_TOKEN_BUDGET) -> str:
     images_lite = _build_images(payload.get("externalImages"), False)
     screenshot = _build_screenshot(payload)
     backend = _build_backend_section(payload.get("backendMap"))
+    preloaded = _build_preloaded_files(payload.get("contexts"), payload.get("backendMap"))
     files_to_modify = _build_files_to_modify(payload.get("contexts"))
 
-    full = header + elements_full + images_full + screenshot + backend + files_to_modify
+    # Pass 1: Full fidelity
+    full = header + elements_full + images_full + screenshot + backend + preloaded + files_to_modify
     if len(full) <= max_chars:
         return full
 
-    pass2 = header + elements_lite + images_full + screenshot + backend + files_to_modify
+    # Pass 2: Strip HTML from elements
+    pass2 = header + elements_lite + images_full + screenshot + backend + preloaded + files_to_modify
     if len(pass2) <= max_chars:
         return pass2
 
-    pass3 = header + elements_lite + images_lite + screenshot + backend + files_to_modify
+    # Pass 3: Simplify vision summaries
+    pass3 = header + elements_lite + images_lite + screenshot + backend + preloaded + files_to_modify
     if len(pass3) <= max_chars:
         return pass3
 
-    pass4 = header + elements_lite + backend + files_to_modify
+    # Pass 4: Drop pre-loaded files (agent will read them itself)
+    pass4 = header + elements_lite + images_lite + screenshot + backend + files_to_modify
     if len(pass4) <= max_chars:
         return pass4
 
-    pass5 = header + elements_lite + files_to_modify
+    # Pass 5: Drop images and screenshot
+    pass5 = header + elements_lite + backend + files_to_modify
     if len(pass5) <= max_chars:
         return pass5
 
-    return truncate_to_token_budget(pass5, budget)
+    # Pass 6: Drop backend section
+    pass6 = header + elements_lite + files_to_modify
+    if len(pass6) <= max_chars:
+        return pass6
+
+    return truncate_to_token_budget(pass6, budget)
 
 
 def validate_payload(raw: Any) -> dict:

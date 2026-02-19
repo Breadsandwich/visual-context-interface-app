@@ -157,6 +157,45 @@ class TestBuildPreloadedFiles:
         assert "hunter2" not in result
 
 
+class TestFormatPayloadPreloading:
+    def test_preloaded_files_appear_in_output(self, tmp_path):
+        src = tmp_path / "src" / "App.jsx"
+        src.parent.mkdir(parents=True)
+        src.write_text("const App = () => <div />\n")
+
+        payload = {
+            "contexts": [
+                {"tagName": "div", "selector": ".app", "sourceFile": "src/App.jsx", "sourceLine": 1}
+            ],
+        }
+
+        with patch.dict(os.environ, {"VCI_OUTPUT_DIR": str(tmp_path)}):
+            result = format_payload(payload)
+
+        assert "Pre-loaded Files" in result
+        assert "const App" in result
+
+    def test_preloaded_files_dropped_before_images_on_tight_budget(self, tmp_path):
+        src = tmp_path / "src" / "App.jsx"
+        src.parent.mkdir(parents=True)
+        src.write_text("x" * 200)
+
+        payload = {
+            "contexts": [
+                {"tagName": "div", "selector": ".app", "sourceFile": "src/App.jsx", "sourceLine": 1}
+            ],
+            "externalImages": [
+                {"filename": "ref.png", "dimensions": "100x100", "description": "A reference image"}
+            ],
+        }
+
+        # Very tight budget — should drop pre-loaded files but keep images
+        with patch.dict(os.environ, {"VCI_OUTPUT_DIR": str(tmp_path)}):
+            result = format_payload(payload, budget=80)
+
+        assert "Pre-loaded Files" not in result
+
+
 class TestFormatPayloadWithEdits:
     def test_edits_appear_in_full_payload(self):
         payload = {

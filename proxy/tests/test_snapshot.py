@@ -1,5 +1,7 @@
 import json
+import os
 import time
+from unittest.mock import patch
 
 import pytest
 from snapshot import (
@@ -259,3 +261,48 @@ class TestListSnapshots:
     def test_empty_when_no_snapshots(self, snapshot_env):
         result = list_snapshots(str(snapshot_env))
         assert result == []
+
+
+class TestAgentToolsSnapshotIntegration:
+    def test_write_file_captures_existing_file(self, snapshot_env):
+        from agent_tools import execute_write_file
+
+        src = snapshot_env / "src" / "App.jsx"
+        src.parent.mkdir(parents=True)
+        src.write_text("original content")
+
+        run_id = init_snapshot(str(snapshot_env))
+
+        with patch.dict(os.environ, {"VCI_OUTPUT_DIR": str(snapshot_env)}):
+            result = execute_write_file("src/App.jsx", "new content", 0, run_id)
+
+        assert not result.startswith("Error")
+        assert src.read_text() == "new content"
+
+        snapshot_copy = snapshot_env / ".vci" / "snapshots" / run_id / "src" / "App.jsx"
+        assert snapshot_copy.read_text() == "original content"
+
+    def test_write_file_works_without_run_id(self, snapshot_env):
+        from agent_tools import execute_write_file
+
+        src = snapshot_env / "src" / "App.jsx"
+        src.parent.mkdir(parents=True)
+
+        with patch.dict(os.environ, {"VCI_OUTPUT_DIR": str(snapshot_env)}):
+            result = execute_write_file("src/App.jsx", "content", 0, None)
+
+        assert not result.startswith("Error")
+        assert src.read_text() == "content"
+
+    def test_write_file_skips_snapshot_for_new_file(self, snapshot_env):
+        from agent_tools import execute_write_file
+
+        run_id = init_snapshot(str(snapshot_env))
+
+        with patch.dict(os.environ, {"VCI_OUTPUT_DIR": str(snapshot_env)}):
+            result = execute_write_file("src/NewFile.jsx", "content", 0, run_id)
+
+        assert not result.startswith("Error")
+        # No snapshot copy should exist for a new file
+        snapshot_dir = snapshot_env / ".vci" / "snapshots" / run_id / "src"
+        assert not snapshot_dir.exists() or not (snapshot_dir / "NewFile.jsx").exists()

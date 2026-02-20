@@ -137,9 +137,30 @@ export function Toast() {
   const isSidebarOpen = useInspectorStore((s) => s.isSidebarOpen)
   const agentClarification = useInspectorStore((s) => s.agentClarification)
   const agentProgress = useInspectorStore((s) => s.agentProgress)
+  const lastSnapshotRunId = useInspectorStore((s) => s.lastSnapshotRunId)
   const widgetWidth = useWidgetWidth()
 
-  const { submitClarification, dismissToast } = useInspectorStore.getState()
+  const { submitClarification, dismissToast, setLastSnapshotRunId, reloadIframe, showToast } = useInspectorStore.getState()
+
+  const handleUndo = async () => {
+    if (!lastSnapshotRunId) return
+    try {
+      const resp = await fetch(`/api/snapshots/${lastSnapshotRunId}/restore`, {
+        method: 'POST',
+      })
+      if (resp.ok) {
+        setLastSnapshotRunId(null)
+        dismissToast()
+        showToast('Changes reverted')
+        reloadIframe()
+      } else {
+        const data = await resp.json()
+        showToast(data.error ?? 'Restore failed')
+      }
+    } catch {
+      showToast('Restore failed')
+    }
+  }
 
   // Clarification mode
   if (agentClarification) {
@@ -199,10 +220,22 @@ export function Toast() {
       {!isToastPersistent && toastMessage === 'Work done' && <CheckIcon />}
       {!isToastPersistent && toastMessage?.startsWith('Agent error') && <ErrorIcon />}
       <span className="toast-message">{toastMessage}</span>
+      {!isToastPersistent && toastMessage === 'Work done' && lastSnapshotRunId && (
+        <button
+          className="toast-undo"
+          onClick={handleUndo}
+          aria-label="Undo agent changes"
+        >
+          Undo
+        </button>
+      )}
       {!isToastPersistent && (
         <button
           className="toast-close"
-          onClick={() => dismissToast()}
+          onClick={() => {
+            setLastSnapshotRunId(null)
+            dismissToast()
+          }}
           aria-label="Dismiss notification"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">

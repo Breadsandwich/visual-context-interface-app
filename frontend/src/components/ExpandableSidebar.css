@@ -120,11 +120,12 @@
     width: 280px;
     max-height: 320px;
     overflow-y: auto;
-    background: var(--adom-bg, #ffffff);
+    background: #ffffff;
     border: 1px solid var(--adom-border, #e5e7eb);
     border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     z-index: 10;
+    opacity: 1;
 }
 
 .sidebar-close {

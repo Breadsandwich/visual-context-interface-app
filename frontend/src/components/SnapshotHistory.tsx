@@ -14,6 +14,8 @@ export function SnapshotHistory() {
   const [snapshots, setSnapshots] = useState<SnapshotManifest[]>([])
   const [loading, setLoading] = useState(false)
   const [restoring, setRestoring] = useState<string | null>(null)
+  const lastSnapshotRunId = useInspectorStore((s) => s.lastSnapshotRunId)
+  const isSidebarOpen = useInspectorStore((s) => s.isSidebarOpen)
   const { showToast, reloadIframe } = useInspectorStore.getState()
 
   const fetchSnapshots = async () => {
@@ -29,9 +31,10 @@ export function SnapshotHistory() {
     }
   }
 
+  // Refetch on mount, when a new snapshot is created, or when sidebar opens
   useEffect(() => {
     fetchSnapshots()
-  }, [])
+  }, [lastSnapshotRunId, isSidebarOpen])
 
   const handleRestore = async (runId: string) => {
     setRestoring(runId)

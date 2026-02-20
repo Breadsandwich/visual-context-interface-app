@@ -16,6 +16,7 @@ interface AgentStatusResponse {
   clarification?: { question: string; context: string } | null
   progress?: Array<{ turn: number; summary: string; files_read?: string[]; files_written?: string[] }>
   plan?: string | null
+  run_id?: string | null
 }
 
 async function fetchAgentStatus(): Promise<AgentStatusResponse> {
@@ -38,7 +39,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 export function PayloadPreview() {
-  const { generatePayload, selectedElements, screenshotData, userPrompt, uploadedImages, showToast, showPersistentToast, reloadIframe, setAgentProgress, setAgentClarification, setAgentPlan, clearAgentState, dismissToast } = useInspectorStore()
+  const { generatePayload, selectedElements, screenshotData, userPrompt, uploadedImages, showToast, showPersistentToast, reloadIframe, setAgentProgress, setAgentClarification, setAgentPlan, clearAgentState, dismissToast, setLastSnapshotRunId } = useInspectorStore()
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -82,6 +83,9 @@ export function PayloadPreview() {
         unavailableCount = 0
 
         if (status.status === 'success') {
+          if (status.run_id) {
+            setLastSnapshotRunId(status.run_id)
+          }
           clearAgentState()
           dismissToast()
           showToast('Work done')

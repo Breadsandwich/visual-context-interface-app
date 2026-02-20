@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -206,6 +207,7 @@ _IDLE_STATE: dict[str, Any] = {
     "user_response": None,
     "progress": [],
     "plan": None,
+    "run_id": None,
 }
 
 _current_run: dict[str, Any] = {**_IDLE_STATE}
@@ -241,7 +243,9 @@ def _write_result(output_dir: str) -> None:
 # ─── Agentic Loop ───────────────────────────────────────────────────
 
 
-async def _execute_agent_loop(client: AsyncAnthropic, formatted_prompt: str, output_dir: str) -> None:
+async def _execute_agent_loop(
+    client: AsyncAnthropic, formatted_prompt: str, output_dir: str, run_id: str | None = None
+) -> None:
     """Run the agentic tool-use loop with per-turn progress tracking."""
     global _current_run
 
@@ -300,7 +304,7 @@ async def _execute_agent_loop(client: AsyncAnthropic, formatted_prompt: str, out
                 logger.info("Tool call: %s(%s)", block.name, _summarize_input(block.input))
 
                 result_text, write_count = execute_tool(
-                    block.name, block.input, write_count
+                    block.name, block.input, write_count, run_id
                 )
 
                 if block.name == "write_file" and not result_text.startswith("Error"):
@@ -349,6 +353,13 @@ async def _execute_agent_loop(client: AsyncAnthropic, formatted_prompt: str, out
         logger.exception("Agent failed with unexpected error")
     finally:
         _write_result(output_dir)
+        # Finalize snapshot
+        if run_id:
+            from snapshot import finalize_snapshot
+            snap_status = "success" if _current_run.get("status") == "success" else "error"
+            files = _current_run.get("files_changed", [])
+            summary = _current_run.get("message", "") or ""
+            finalize_snapshot(output_dir, run_id, files, summary, snap_status)
 
 
 async def _run_agent(context_path: str) -> None:
@@ -405,7 +416,12 @@ async def _run_agent(context_path: str) -> None:
             "progress": [{"turn": 0, "summary": f"Starting: {plan}" if plan else "Starting work..."}],
         }
 
-        await _execute_agent_loop(client, formatted_prompt, output_dir)
+        # Initialize snapshot before execution
+        from snapshot import init_snapshot
+        run_id = init_snapshot(output_dir)
+        _current_run = {**_current_run, "run_id": run_id}
+
+        await _execute_agent_loop(client, formatted_prompt, output_dir, run_id)
 
     except (ValueError, FileNotFoundError) as exc:
         _current_run = {**_current_run, "status": "error", "error": str(exc)}
@@ -450,10 +466,15 @@ async def _resume_agent(context_path: str, formatted_prompt: str) -> None:
     global _current_run
     output_dir = os.getenv("VCI_OUTPUT_DIR", "/output")
 
+    # Initialize snapshot for resumed run
+    from snapshot import init_snapshot
+    run_id = init_snapshot(output_dir)
+
     _current_run = {
         **_current_run,
         "status": "running",
         "clarification": None,
+        "run_id": run_id,
         "progress": [{"turn": 0, "summary": "Starting work with your clarification..."}],
     }
 
@@ -463,7 +484,7 @@ async def _resume_agent(context_path: str, formatted_prompt: str) -> None:
             raise ValueError("ANTHROPIC_API_KEY not configured")
 
         client = AsyncAnthropic(api_key=api_key)
-        await _execute_agent_loop(client, formatted_prompt, output_dir)
+        await _execute_agent_loop(client, formatted_prompt, output_dir, run_id)
     except Exception:
         _current_run = {**_current_run, "status": "error", "error": "Resume failed unexpectedly"}
         logger.exception("Resume agent failed")
@@ -542,4 +563,49 @@ async def agent_status():
         "clarification": _current_run["clarification"],
         "progress": _current_run["progress"],
         "plan": _current_run["plan"],
+        "run_id": _current_run.get("run_id"),
     }
+
+
+_RUN_ID_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}_[0-9a-f]{6}$")
+
+
+@app.get("/agent/snapshots")
+async def get_snapshots():
+    """List all snapshots, newest first."""
+    from snapshot import list_snapshots
+    output_dir = os.getenv("VCI_OUTPUT_DIR", "/output")
+    return {"snapshots": list_snapshots(output_dir)}
+
+
+@app.post("/agent/snapshots/{run_id}/restore")
+async def restore_snapshot_endpoint(run_id: str):
+    """Restore files from a snapshot."""
+    # Prevent restore during active agent run
+    if _current_run["status"] in ("analyzing", "clarifying", "running"):
+        return Response(
+            content=json.dumps({"error": "Cannot restore while agent is running"}),
+            status_code=409,
+            media_type="application/json",
+        )
+
+    from snapshot import restore_snapshot
+
+    if not _RUN_ID_PATTERN.match(run_id):
+        return Response(
+            content=json.dumps({"error": "Invalid run_id format"}),
+            status_code=400,
+            media_type="application/json",
+        )
+
+    output_dir = os.getenv("VCI_OUTPUT_DIR", "/output")
+    restored = restore_snapshot(output_dir, run_id)
+
+    if restored is None:
+        return Response(
+            content=json.dumps({"error": "Snapshot not found or not restorable"}),
+            status_code=409,
+            media_type="application/json",
+        )
+
+    return {"restored": restored, "run_id": run_id}

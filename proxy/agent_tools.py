@@ -164,8 +164,8 @@ def execute_read_file(path: str) -> str:
         return f"Error reading file: {exc}"
 
 
-def execute_write_file(path: str, content: str, write_count: int) -> str:
-    """Write a file within the sandbox. Returns status message."""
+def execute_write_file(path: str, content: str, write_count: int, run_id: str | None = None) -> str:
+    """Write a file within the sandbox. Optionally captures snapshot before overwriting."""
     if write_count >= MAX_WRITES_PER_RUN:
         return f"Error: Maximum write limit reached ({MAX_WRITES_PER_RUN} files per run)"
 
@@ -183,6 +183,11 @@ def execute_write_file(path: str, content: str, write_count: int) -> str:
     content_bytes = content.encode("utf-8")
     if len(content_bytes) > MAX_WRITE_SIZE:
         return f"Error: Content too large ({len(content_bytes):,} bytes, max {MAX_WRITE_SIZE:,})"
+
+    # Capture snapshot before overwriting (if run_id provided and file exists)
+    if run_id and target.is_file():
+        from snapshot import capture_file
+        capture_file(str(_get_base_dir()), run_id, path)
 
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -249,7 +254,7 @@ def execute_search_files(pattern: str) -> str:
 
 
 def execute_tool(
-    tool_name: str, tool_input: dict, write_count: int
+    tool_name: str, tool_input: dict, write_count: int, run_id: str | None = None
 ) -> tuple[str, int]:
     """Dispatch a tool call. Returns (result_text, updated_write_count)."""
     if tool_name == "read_file":
@@ -259,6 +264,7 @@ def execute_tool(
             tool_input.get("path", ""),
             tool_input.get("content", ""),
             write_count,
+            run_id,
         )
         if not result.startswith("Error"):
             write_count += 1

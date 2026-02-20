@@ -97,6 +97,26 @@ describe('inspectorStore elementEdits', () => {
   })
 })
 
+describe('lastSnapshotRunId', () => {
+  it('starts as null', () => {
+    expect(useInspectorStore.getState().lastSnapshotRunId).toBeNull()
+  })
+
+  it('can be set and cleared', () => {
+    useInspectorStore.getState().setLastSnapshotRunId('2026-02-20T14-30-00_abc123')
+    expect(useInspectorStore.getState().lastSnapshotRunId).toBe('2026-02-20T14-30-00_abc123')
+
+    useInspectorStore.getState().setLastSnapshotRunId(null)
+    expect(useInspectorStore.getState().lastSnapshotRunId).toBeNull()
+  })
+
+  it('is cleared by resetAll', () => {
+    useInspectorStore.getState().setLastSnapshotRunId('2026-02-20T14-30-00_abc123')
+    useInspectorStore.getState().resetAll()
+    expect(useInspectorStore.getState().lastSnapshotRunId).toBeNull()
+  })
+})
+
 describe('inspectorStore generatePayload', () => {
   it('includes savedEdits in context entries', () => {
     useInspectorStore.getState().toggleSelectedElement(mockElement)

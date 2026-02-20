@@ -4,6 +4,7 @@ import asyncio
 import json as json_module
 import logging
 import os
+import re
 from urllib.parse import unquote
 
 from fastapi import FastAPI, Request, Response
@@ -252,6 +253,7 @@ async def agent_status():
                 "clarification": data.get("clarification"),
                 "progress": data.get("progress", []),
                 "plan": data.get("plan"),
+                "run_id": data.get("run_id"),
             }
     except Exception:
         return {"status": "unavailable"}
@@ -282,6 +284,58 @@ async def agent_respond_proxy(request_body: AgentRespondProxyRequest):
         logger.exception("Agent respond proxy failed")
         return Response(
             content=json_module.dumps({"error": "Failed to send response"}),
+            status_code=500,
+            media_type="application/json",
+        )
+
+
+@app.get("/api/snapshots")
+async def snapshots_proxy():
+    """Proxy snapshot listing from agent service."""
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.get("http://localhost:8001/agent/snapshots", timeout=2.0)
+            return resp.json()
+    except Exception:
+        return {"snapshots": []}
+
+
+_SNAPSHOT_RUN_ID_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}_[0-9a-f]{6}$")
+
+
+@app.post("/api/snapshots/{run_id}/restore")
+async def restore_snapshot_proxy(run_id: str):
+    """Proxy snapshot restore to agent service."""
+    if not _SNAPSHOT_RUN_ID_PATTERN.match(run_id):
+        return Response(
+            content=json_module.dumps({"error": "Invalid run_id format"}),
+            status_code=400,
+            media_type="application/json",
+        )
+
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(
+                f"http://localhost:8001/agent/snapshots/{run_id}/restore",
+                timeout=5.0,
+            )
+            if resp.status_code != 200:
+                return Response(
+                    content=resp.content,
+                    status_code=resp.status_code,
+                    media_type="application/json",
+                )
+            return resp.json()
+    except httpx.ConnectError:
+        return Response(
+            content=json_module.dumps({"error": "Agent service unavailable"}),
+            status_code=503,
+            media_type="application/json",
+        )
+    except Exception:
+        logger.exception("Snapshot restore proxy failed")
+        return Response(
+            content=json_module.dumps({"error": "Restore failed"}),
             status_code=500,
             media_type="application/json",
         )

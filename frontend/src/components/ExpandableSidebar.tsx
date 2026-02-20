@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useInspectorStore } from '../stores/inspectorStore'
 import { useEditorStore } from '../stores/editorStore'
 import { SelectionPreview } from './SelectionPreview'
 import { ImageUpload } from './ImageUpload'
 import { InstructionInput } from './InstructionInput'
 import { PayloadPreview } from './PayloadPreview'
+import { SnapshotHistory } from './SnapshotHistory'
 import { EditorPanel } from './EditorPanel'
 import './ExpandableSidebar.css'
 
@@ -20,16 +21,33 @@ export function ExpandableSidebar({ applyEdit, revertEdits, revertElement, getCo
   const activeElement = useEditorStore((s) => s.activeElement)
   const isEditMode = mode === 'edit'
   const showBackArrow = isEditMode && activeElement !== null
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const historyRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isSidebarOpen) {
-        closeSidebar()
+        if (historyOpen) {
+          setHistoryOpen(false)
+        } else {
+          closeSidebar()
+        }
       }
     }
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
-  }, [isSidebarOpen, closeSidebar])
+  }, [isSidebarOpen, closeSidebar, historyOpen])
+
+  useEffect(() => {
+    if (!historyOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (historyRef.current && !historyRef.current.contains(e.target as Node)) {
+        setHistoryOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [historyOpen])
 
   return (
     <aside
@@ -58,17 +76,39 @@ export function ExpandableSidebar({ applyEdit, revertEdits, revertElement, getCo
           <div className="sidebar-header-spacer" />
         )}
         <h2>{isEditMode ? 'Editor' : 'Context Panel'}</h2>
-        <button
-          className="sidebar-close"
-          onClick={closeSidebar}
-          title="Close Panel (Escape)"
-          aria-label="Close Panel"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+        <div className="sidebar-header-actions">
+          <div className="snapshot-history-dropdown" ref={historyRef}>
+            <button
+              className="sidebar-history"
+              onClick={() => setHistoryOpen((prev) => !prev)}
+              title="Snapshot History"
+              aria-label="Snapshot History"
+              aria-expanded={historyOpen}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M12 7v5l4 2" />
+              </svg>
+            </button>
+            {historyOpen && (
+              <div className="snapshot-history-popover">
+                <SnapshotHistory />
+              </div>
+            )}
+          </div>
+          <button
+            className="sidebar-close"
+            onClick={closeSidebar}
+            title="Close Panel (Escape)"
+            aria-label="Close Panel"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="sidebar-content">
@@ -100,6 +140,7 @@ export function ExpandableSidebar({ applyEdit, revertEdits, revertElement, getCo
               <h3>Export</h3>
               <PayloadPreview />
             </div>
+
           </>
         )}
       </div>

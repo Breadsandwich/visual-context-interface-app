@@ -5,6 +5,7 @@ import { SelectionPreview } from './SelectionPreview'
 import { ImageUpload } from './ImageUpload'
 import { InstructionInput } from './InstructionInput'
 import { PayloadPreview } from './PayloadPreview'
+import { SnapshotHistory } from './SnapshotHistory'
 import { EditorPanel } from './EditorPanel'
 import './ExpandableSidebar.css'
 
@@ -99,6 +100,11 @@ export function ExpandableSidebar({ applyEdit, revertEdits, revertElement, getCo
             <div className="sidebar-section">
               <h3>Export</h3>
               <PayloadPreview />
+            </div>
+
+            <div className="sidebar-section">
+              <h3>Snapshot History</h3>
+              <SnapshotHistory />
             </div>
           </>
         )}

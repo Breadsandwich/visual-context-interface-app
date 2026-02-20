@@ -36,7 +36,7 @@
 
 .sidebar-header {
     position: relative;
-    z-index: 2;
+    z-index: 3;
     display: grid;
     grid-template-columns: 32px 1fr auto;
     align-items: center;

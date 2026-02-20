@@ -4,6 +4,7 @@ import asyncio
 import json as json_module
 import logging
 import os
+import re
 from urllib.parse import unquote
 
 from fastapi import FastAPI, Request, Response
@@ -252,6 +253,7 @@ async def agent_status():
                 "clarification": data.get("clarification"),
                 "progress": data.get("progress", []),
                 "plan": data.get("plan"),
+                "run_id": data.get("run_id"),
             }
     except Exception:
         return {"status": "unavailable"}
@@ -298,9 +300,19 @@ async def snapshots_proxy():
         return {"snapshots": []}
 
 
+_SNAPSHOT_RUN_ID_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}_[0-9a-f]{6}$")
+
+
 @app.post("/api/snapshots/{run_id}/restore")
 async def restore_snapshot_proxy(run_id: str):
     """Proxy snapshot restore to agent service."""
+    if not _SNAPSHOT_RUN_ID_PATTERN.match(run_id):
+        return Response(
+            content=json_module.dumps({"error": "Invalid run_id format"}),
+            status_code=400,
+            media_type="application/json",
+        )
+
     try:
         async with httpx.AsyncClient() as http:
             resp = await http.post(

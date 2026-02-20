@@ -466,10 +466,15 @@ async def _resume_agent(context_path: str, formatted_prompt: str) -> None:
     global _current_run
     output_dir = os.getenv("VCI_OUTPUT_DIR", "/output")
 
+    # Initialize snapshot for resumed run
+    from snapshot import init_snapshot
+    run_id = init_snapshot(output_dir)
+
     _current_run = {
         **_current_run,
         "status": "running",
         "clarification": None,
+        "run_id": run_id,
         "progress": [{"turn": 0, "summary": "Starting work with your clarification..."}],
     }
 
@@ -479,7 +484,7 @@ async def _resume_agent(context_path: str, formatted_prompt: str) -> None:
             raise ValueError("ANTHROPIC_API_KEY not configured")
 
         client = AsyncAnthropic(api_key=api_key)
-        await _execute_agent_loop(client, formatted_prompt, output_dir)
+        await _execute_agent_loop(client, formatted_prompt, output_dir, run_id)
     except Exception:
         _current_run = {**_current_run, "status": "error", "error": "Resume failed unexpectedly"}
         logger.exception("Resume agent failed")
@@ -576,6 +581,14 @@ async def get_snapshots():
 @app.post("/agent/snapshots/{run_id}/restore")
 async def restore_snapshot_endpoint(run_id: str):
     """Restore files from a snapshot."""
+    # Prevent restore during active agent run
+    if _current_run["status"] in ("analyzing", "clarifying", "running"):
+        return Response(
+            content=json.dumps({"error": "Cannot restore while agent is running"}),
+            status_code=409,
+            media_type="application/json",
+        )
+
     from snapshot import restore_snapshot
 
     if not _RUN_ID_PATTERN.match(run_id):

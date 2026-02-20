@@ -132,7 +132,7 @@ def finalize_snapshot(
         "status": status,
         "files": list(files_changed),
         "context_summary": context_summary,
-        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     manifest_path.write_text(json.dumps(updated_manifest, indent=2))
 

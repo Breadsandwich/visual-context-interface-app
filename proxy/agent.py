@@ -240,6 +240,26 @@ def _write_result(output_dir: str) -> None:
         logger.exception("Failed to write agent result")
 
 
+_SUMMARY_PREAMBLE_RE = re.compile(
+    r"^.*?(?=^\d+\.\s|^[-*]\s)",
+    re.DOTALL | re.MULTILINE,
+)
+_SUMMARY_CONCLUSION_RE = re.compile(
+    r"\n\n(?:All changes|All \d+|Everything|That's all|The changes|These changes|I've (?:made|applied|completed|updated)).*$",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _trim_summary(text: str) -> str:
+    """Trim verbose agent response to just the list of changes."""
+    if not text:
+        return text
+    trimmed = _SUMMARY_PREAMBLE_RE.sub("", text, count=1)
+    trimmed = _SUMMARY_CONCLUSION_RE.sub("", trimmed)
+    trimmed = trimmed.strip()
+    return trimmed if trimmed else text
+
+
 # ─── Agentic Loop ───────────────────────────────────────────────────
 
 
@@ -358,7 +378,7 @@ async def _execute_agent_loop(
             from snapshot import finalize_snapshot
             snap_status = "success" if _current_run.get("status") == "success" else "error"
             files = _current_run.get("files_changed", [])
-            summary = _current_run.get("message", "") or ""
+            summary = _trim_summary(_current_run.get("message", "") or "")
             finalize_snapshot(output_dir, run_id, files, summary, snap_status)
 
 

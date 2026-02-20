@@ -27,6 +27,7 @@ interface InspectorState {
   agentProgress: Array<{ turn: number; summary: string; files_read?: string[]; files_written?: string[] }>
   agentClarification: { question: string; context: string } | null
   agentPlan: string | null
+  lastSnapshotRunId: string | null
 
   setMode: (mode: InspectorMode) => void
   toggleSelectedElement: (element: ElementContext) => void
@@ -64,6 +65,7 @@ interface InspectorState {
   setAgentClarification: (clarification: InspectorState['agentClarification']) => void
   setAgentPlan: (plan: string | null) => void
   submitClarification: (response: string) => Promise<void>
+  setLastSnapshotRunId: (runId: string | null) => void
   clearAgentState: () => void
 }
 
@@ -88,6 +90,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
   agentProgress: [],
   agentClarification: null,
   agentPlan: null,
+  lastSnapshotRunId: null,
 
   setMode: (mode) => set({ mode }),
 
@@ -316,6 +319,7 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
     agentProgress: [],
     agentClarification: null,
     agentPlan: null,
+    lastSnapshotRunId: null,
   })),
 
   reloadIframe: () => set((state) => ({ iframeReloadTrigger: state.iframeReloadTrigger + 1 })),
@@ -345,6 +349,8 @@ export const useInspectorStore = create<InspectorState>((set, get) => ({
       get().showToast('Failed to send response')
     }
   },
+
+  setLastSnapshotRunId: (runId) => set({ lastSnapshotRunId: runId }),
 
   clearAgentState: () => set({
     agentProgress: [],

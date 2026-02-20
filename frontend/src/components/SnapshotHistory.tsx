@@ -102,9 +102,6 @@ export function SnapshotHistory() {
                 </button>
               )}
             </div>
-            {snap.context_summary && (
-              <p className="snapshot-item-summary">{snap.context_summary}</p>
-            )}
             {snap.files.length > 0 && (
               <span className="snapshot-item-files">{formatFiles(snap.files)}</span>
             )}

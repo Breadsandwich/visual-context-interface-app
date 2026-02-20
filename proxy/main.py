@@ -287,6 +287,48 @@ async def agent_respond_proxy(request_body: AgentRespondProxyRequest):
         )
 
 
+@app.get("/api/snapshots")
+async def snapshots_proxy():
+    """Proxy snapshot listing from agent service."""
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.get("http://localhost:8001/agent/snapshots", timeout=2.0)
+            return resp.json()
+    except Exception:
+        return {"snapshots": []}
+
+
+@app.post("/api/snapshots/{run_id}/restore")
+async def restore_snapshot_proxy(run_id: str):
+    """Proxy snapshot restore to agent service."""
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(
+                f"http://localhost:8001/agent/snapshots/{run_id}/restore",
+                timeout=5.0,
+            )
+            if resp.status_code != 200:
+                return Response(
+                    content=resp.content,
+                    status_code=resp.status_code,
+                    media_type="application/json",
+                )
+            return resp.json()
+    except httpx.ConnectError:
+        return Response(
+            content=json_module.dumps({"error": "Agent service unavailable"}),
+            status_code=503,
+            media_type="application/json",
+        )
+    except Exception:
+        logger.exception("Snapshot restore proxy failed")
+        return Response(
+            content=json_module.dumps({"error": "Restore failed"}),
+            status_code=500,
+            media_type="application/json",
+        )
+
+
 class PropertyChange(BaseModel):
     property: str = Field(..., min_length=1, max_length=100)
     value: str = Field(..., max_length=500)

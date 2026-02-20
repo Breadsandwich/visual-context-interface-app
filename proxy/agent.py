@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -559,3 +560,39 @@ async def agent_status():
         "plan": _current_run["plan"],
         "run_id": _current_run.get("run_id"),
     }
+
+
+_RUN_ID_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}_[0-9a-f]{6}$")
+
+
+@app.get("/agent/snapshots")
+async def get_snapshots():
+    """List all snapshots, newest first."""
+    from snapshot import list_snapshots
+    output_dir = os.getenv("VCI_OUTPUT_DIR", "/output")
+    return {"snapshots": list_snapshots(output_dir)}
+
+
+@app.post("/agent/snapshots/{run_id}/restore")
+async def restore_snapshot_endpoint(run_id: str):
+    """Restore files from a snapshot."""
+    from snapshot import restore_snapshot
+
+    if not _RUN_ID_PATTERN.match(run_id):
+        return Response(
+            content=json.dumps({"error": "Invalid run_id format"}),
+            status_code=400,
+            media_type="application/json",
+        )
+
+    output_dir = os.getenv("VCI_OUTPUT_DIR", "/output")
+    restored = restore_snapshot(output_dir, run_id)
+
+    if restored is None:
+        return Response(
+            content=json.dumps({"error": "Snapshot not found or not restorable"}),
+            status_code=409,
+            media_type="application/json",
+        )
+
+    return {"restored": restored, "run_id": run_id}
